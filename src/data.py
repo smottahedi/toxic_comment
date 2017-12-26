@@ -9,16 +9,23 @@ import string
 import config
 import random
 from urllib.request import urlretrieve 
+import numpy as np
 
 
 def download_data():
     print(os.getcwd())
     train_url = 'https://www.kaggle.com/c/jigsaw-toxic-comment-classification-challenge/download/train.csv.zip'
     test_url = 'https://www.kaggle.com/c/jigsaw-toxic-comment-classification-challenge/download/test.csv.zip'
+    glove_url = 'http://nlp.stanford.edu/data/glove.840B.300d.zip'
     if not os.path.isfile('./data/train.csv.zip'):
+        print('download training data')
         urlretrieve(train_url, filename='./data/train.csv.zip')
     if not os.path.isfile('./data/test.csv.zip'):
+        print('download test data')
         urlretrieve(test_url, filename='./data/test.csv.zip')
+    if not os.path.isfile('./data/glove.840B.300d.zip'):
+        print('download glove embeddings')
+        urlretrieve(glove_url, filename='./data/glove.840B.300d.zip')
 
 
 def read_file(filename):
@@ -27,15 +34,38 @@ def read_file(filename):
             df = pd.read_csv(myfile)
     return df
 
-def sentence_tokenizer(sentence, stem=False, stopwords=False):
+
+def get_glove(path_to_glove,word2index_map):
+    embedding_weights = {}
+    count_all_words = 0 
+    with ZipFile(path_to_glove) as z:
+        with z.open("glove.840B.300d.txt") as f:
+            for line in f:
+                vals = line.split()
+                word = str(vals[0].decode("utf-8")) 
+                if word in word2index_map:
+                    print(word)
+                    count_all_words+=1
+                    coefs = np.asarray(vals[1:], dtype='float32')
+                    coefs /= np.linalg.norm(coefs)
+                    embedding_weights[word] = coefs
+                if count_all_words == config.VOCAB_SIZE - 1:
+                        break
+    return embedding_weights 
+
+
+def sentence_tokenizer(sentence, stem=True, stopword=True, normalize_numbers=True):
     sentence = sentence.lower()
     sentence = word_tokenize(sentence)
     sentence = [word for word in sentence if word not in string.punctuation]
-    if stopwords:
+    if stopword:
         sentence = [word for word in sentence if not word in stopwords.words('english')]
     if stem:
         porter_stemmer = PorterStemmer()
         sentence = [porter_stemmer.stem(word) for word in sentence]
+    if normalize_numbers:
+        replace_numbers = re.compile(r'\d+',re.IGNORECASE)
+        sentence = replace_numbers.sub('number', sentence)
     return sentence
         
         
@@ -83,7 +113,9 @@ def load_vocab(vocab_path):
 
 
 def sentence2id(vocab, line):
-    return [vocab.get(token, vocab['<unk>']) for token in sentence_tokenizer(line)]
+    # return [vocab.get(token, vocab['<unk>']) for token in sentence_tokenizer(line)]
+    return [vocab.get(token) for token in sentence_tokenizer(line)]
+
 
 
 def token2id(filename):
@@ -96,7 +128,7 @@ def token2id(filename):
     out_path = 'train_ids.txt' 
     out_file = open(os.path.join(config.PROCESSED_PATH, out_path), 'w')
     
-    lines = df.comment_text.values
+    lines = df.comment_text.fillna('NA').values
     for line in lines:
         ids = sentence2id(vocab, line)
         out_file.write(' '.join(str(id_) for id_ in ids) + '\n')
@@ -139,8 +171,12 @@ def process_data():
 
 
 def _pad_input(input_, size):
-    return input_ + [config.PAD_ID] * (size - len(input_))
+    if len(input_) > config.MAX_SEQ_LENGTH:
+        output = input_[:confing.MAX_SEQ_LENGTH]
+    else:
+        output = input_ + [config.PAD_ID] * (size - len(input_))
 
+    return output
 
 def get_batch(data_bucket, bucket_id, batch_size=1):
     """ Return one batch to feed into the model """
