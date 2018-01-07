@@ -1,4 +1,5 @@
 from nltk.tokenize import word_tokenize
+from nltk.tokenize import RegexpTokenizer
 from nltk.corpus import stopwords
 from nltk.stem import PorterStemmer 
 import re
@@ -10,7 +11,7 @@ import config
 import random
 from urllib.request import urlretrieve 
 import numpy as np
-
+from tqdm import tqdm
 
 def download_data():
     print(os.getcwd())
@@ -29,43 +30,65 @@ def download_data():
 
 
 def read_file(filename):
-    with ZipFile(filename) as myzip:
-        with myzip.open('train.csv') as myfile:
+    with ZipFile(filename + '.zip') as myzip:
+        with myzip.open(myzip.filelist.pop()) as myfile:
             df = pd.read_csv(myfile)
     return df
 
 
-def get_glove(path_to_glove,word2index_map):
+def make_dir(path):
+    """ Create a directory if there isn't one already. """
+    try:
+        os.mkdir(path)
+    except OSError:
+        pass
+
+def get_glove(path_to_glove, vocab_path):
+    _, word2index_map = load_vocab(vocab_path)
     embedding_weights = {}
     count_all_words = 0 
+    embed = []
     with ZipFile(path_to_glove) as z:
-        with z.open("glove.840B.300d.txt") as f:
-            for line in f:
+        with z.open("glove.6B.50d.txt") as f:
+            print('get glove word vector!')
+            for line in tqdm(f):
                 vals = line.split()
                 word = str(vals[0].decode("utf-8")) 
                 if word in word2index_map:
-                    print(word)
                     count_all_words+=1
                     coefs = np.asarray(vals[1:], dtype='float32')
                     coefs /= np.linalg.norm(coefs)
                     embedding_weights[word] = coefs
-                if count_all_words == config.VOCAB_SIZE - 1:
+                    embed.append(coefs)
+                if count_all_words == config.VOCAB_SIZE:
                         break
-    return embedding_weights 
+        embedding_matrix = np.zeros((config.VOCAB_SIZE, config.GLOVE_SIZE))
+        print('filling embedding matrix')
+        for word, index in tqdm(word2index_map.items()):
+            if not word == "<pad>":
+                try:
+                    word_embedding = embedding_weights[word]
+                    embedding_matrix[index, :] = word_embedding
+                except:
+                    pass
+    return embedding_matrix
 
 
-def sentence_tokenizer(sentence, stem=True, stopword=True, normalize_numbers=True):
+def sentence_tokenizer(sentence, stem=False, stopword=True, normalize_numbers=True):
     sentence = sentence.lower()
-    sentence = word_tokenize(sentence)
+    if normalize_numbers:
+        replace_numbers = re.compile(r'\d+',re.IGNORECASE)
+        sentence = replace_numbers.sub('number', sentence)
+    tokenizer = RegexpTokenizer(r'\w+')
+    sentence = tokenizer.tokenize(sentence)
     sentence = [word for word in sentence if word not in string.punctuation]
+    sentence = [word for word in sentence if len(word)>1]
     if stopword:
         sentence = [word for word in sentence if not word in stopwords.words('english')]
     if stem:
         porter_stemmer = PorterStemmer()
         sentence = [porter_stemmer.stem(word) for word in sentence]
-    if normalize_numbers:
-        replace_numbers = re.compile(r'\d+',re.IGNORECASE)
-        sentence = replace_numbers.sub('number', sentence)
+
     return sentence
         
         
@@ -83,7 +106,8 @@ def build_vocab(filename):
     vocab = {}
     
     df = read_file(in_path)
-    for line in df.comment_text:
+    print('tokenizing vocab file')
+    for line in tqdm(df.comment_text):
         for token in sentence_tokenizer(line):
             if token not in vocab:
                 vocab[token] = 0
@@ -93,10 +117,11 @@ def build_vocab(filename):
     with open(out_path, 'w') as f:
         f.write('<pad>' + '\n')
         f.write('<unk>' + '\n')
-        f.write('<s>' + '\n')
-        f.write('<\s>' + '\n') 
+        # f.write('<s>' + '\n')
+        # f.write('<\s>' + '\n') 
         index = 4
-        for word in sorted_vocab:
+        print('writing vocab file')
+        for word in tqdm(sorted_vocab):
             if vocab[word] < config.THRESHOLD:
                 with open('src/config.py', 'a') as cf:
                         cf.write('VOCAB_SIZE = ' + str(index) + '\n')
@@ -114,42 +139,35 @@ def load_vocab(vocab_path):
 
 def sentence2id(vocab, line):
     # return [vocab.get(token, vocab['<unk>']) for token in sentence_tokenizer(line)]
-    return [vocab.get(token) for token in sentence_tokenizer(line)]
+    return [vocab.get(token, vocab['<unk>'] ) for token in sentence_tokenizer(line)]
 
 
 
-def token2id(filename):
+def token2id(filename, out_path='train_ids.txt'):
     """ Convert all the tokens in the data into their corresponding
     index in the vocabulary. """
     vocab_path = 'vocab.txt'
     _, vocab = load_vocab(os.path.join(config.PROCESSED_PATH, vocab_path))
     in_file = os.path.join(config.DATA_PATH, filename)
     df = read_file(in_file)
-    out_path = 'train_ids.txt' 
     out_file = open(os.path.join(config.PROCESSED_PATH, out_path), 'w')
     
     lines = df.comment_text.fillna('NA').values
-    for line in lines:
+    print('token to ids')
+    for line in tqdm(lines):
         ids = sentence2id(vocab, line)
         out_file.write(' '.join(str(id_) for id_ in ids) + '\n')
         
         
-def load_data(filename, max_training_size=None):
+def load_data(filename):
     file = open(os.path.join(config.PROCESSED_PATH, filename), 'r')
-    file = file.readline()
-    data_buckets = [[] for _ in config.BUCKETS]
-    i = 0
-    while file:
-        if (i + 1) % 10000 == 0:
-            print("Bucketing conversation number", i)
-        ids = [int(id_) for id_ in file.split()]
-        for bucket_id, encode_max_size in enumerate(config.BUCKETS):
-            if len(ids) <= encode_max_size:
-                data_buckets[bucket_id].append(ids)
-                break
-        file = file.readline()
-        i += 1
-    return data_buckets
+    print('loading {}'.format(filename))
+    data = []
+    lines = file.readlines()
+    for line in tqdm(lines):
+        ids = [int(id_) for id_ in line.split()]
+        data.append(ids)
+    return data
 
 
 def _reshape_batch(inputs, size, batch_size):
@@ -161,37 +179,81 @@ def _reshape_batch(inputs, size, batch_size):
                                     for batch_id in range(batch_size)], dtype=np.int32))
     return batch_inputs
 
+def _get_buckets():
+    """ Load the dataset into buckets based on their lengths.
+    train_buckets_scale is the inverval that'll help us 
+    choose a random bucket later on.
+    """
+    # test_buckets = data.load_data('test_ids.enc')
+    data_buckets = load_data('train_ids.txt')
+    train_bucket_sizes = [len(data_buckets[b]) for b in range(len(config.BUCKETS))]
+    print("Number of samples in each bucket:\n", train_bucket_sizes)
+    train_total_size = sum(train_bucket_sizes)
+    # list of increasing numbers from 0 to 1 that we'll use to select a bucket.
+    train_buckets_scale = [sum(train_bucket_sizes[:i + 1]) / train_total_size
+                           for i in range(len(train_bucket_sizes))]
+    print("Bucket scale:\n", train_buckets_scale)
+    return data_buckets, train_buckets_scale
 
 
 def process_data():
-    download_data()
-    print('Preparing data to be model-ready ...')
-    build_vocab('train.csv.zip')
-    token2id('train.csv.zip')
+    # download_data()
+    # print('Preparing data to be model-ready ...')
+    # build_vocab('train.csv')
+    # token2id('train.csv')
+    token2id('test.csv', 'test_ids.txt')
 
 
 def _pad_input(input_, size):
     if len(input_) > config.MAX_SEQ_LENGTH:
-        output = input_[:confing.MAX_SEQ_LENGTH]
+        output = input_[:config.MAX_SEQ_LENGTH]
     else:
         output = input_ + [config.PAD_ID] * (size - len(input_))
 
     return output
 
-def get_batch(data_bucket, bucket_id, batch_size=1):
+def get_batch(data, filename, batch_size=1):
     """ Return one batch to feed into the model """
+
+    # TODO: should return targets
+
     # only pad to the max length of the bucket
-    encoder_size = config.BUCKETS[bucket_id]
-    encoder_inputs = []
+    inputs = []
+    inputs_length = []
+    targets = []
+    
+    in_file = os.path.join(config.DATA_PATH, filename)
+    df = read_file(in_file)
+    index = random.sample(range(len(data)), batch_size)
 
-    for _ in range(batch_size):
-        encoder_input = random.choice(data_bucket)
-        # pad both encoder and decoder, reverse the encoder
-        encoder_inputs.append(list(_pad_input(encoder_input, encoder_size)))
-
+    for idx in index:
+        input_length = len(data[idx])
+        targets.append(df.iloc[idx, 2:].values)
+        inputs.append(list(_pad_input(data[idx], config.MAX_SEQ_LENGTH)))
+        inputs_length.append(input_length if input_length < config.MAX_SEQ_LENGTH else config.MAX_SEQ_LENGTH)
+        
     # now we create batch-major vectors from the data selected above.
-    batch_encoder_inputs = _reshape_batch(encoder_inputs, encoder_size, batch_size)
-    return batch_encoder_inputs, batch_decoder_inputs
+    # batch_inputs = _reshape_batch(inputs, input_length, batch_size)
+    return inputs, targets, inputs_length
+
+def get_test_data(data, filename):
+    inputs = []
+    inputs_length = []
+    
+    in_file = os.path.join(config.DATA_PATH, filename)
+    df = read_file(in_file)
+    ids = df.iloc[:, 0]
+
+    for line in data:
+        if len(line) == 0:
+            line = [1]
+        pad_seq = list(_pad_input(line, config.MAX_SEQ_LENGTH))
+        inputs.append(pad_seq)
+        inputs_length.append(len(pad_seq))
+
+    return inputs, ids, inputs_length
+
+
 
 if __name__ == '__main__':
     process_data()
