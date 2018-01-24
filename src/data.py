@@ -17,16 +17,16 @@ def download_data():
     print(os.getcwd())
     train_url = 'https://www.kaggle.com/c/jigsaw-toxic-comment-classification-challenge/download/train.csv.zip'
     test_url = 'https://www.kaggle.com/c/jigsaw-toxic-comment-classification-challenge/download/test.csv.zip'
-    glove_url = 'http://nlp.stanford.edu/data/glove.840B.300d.zip'
+    glove_url = 'http://nlp.stanford.edu/data/glove.6B.zip'
     if not os.path.isfile('./data/train.csv.zip'):
         print('download training data')
         urlretrieve(train_url, filename='./data/train.csv.zip')
     if not os.path.isfile('./data/test.csv.zip'):
         print('download test data')
         urlretrieve(test_url, filename='./data/test.csv.zip')
-    if not os.path.isfile('./data/glove.840B.300d.zip'):
+    if not os.path.isfile('./data/glove.6B.zip'):
         print('download glove embeddings')
-        urlretrieve(glove_url, filename='./data/glove.840B.300d.zip')
+        urlretrieve(glove_url, filename='./data/glove.6B.zip')
 
 
 def read_file(filename):
@@ -49,7 +49,7 @@ def get_glove(path_to_glove, vocab_path):
     count_all_words = 0 
     embed = []
     with ZipFile(path_to_glove) as z:
-        with z.open("glove.6B.50d.txt") as f:
+        with z.open("glove.6B.100d.txt") as f:
             print('get glove word vector!')
             for line in tqdm(f):
                 vals = line.split()
@@ -158,16 +158,43 @@ def token2id(filename, out_path='train_ids.txt'):
         ids = sentence2id(vocab, line)
         out_file.write(' '.join(str(id_) for id_ in ids) + '\n')
         
-        
-def load_data(filename):
-    file = open(os.path.join(config.PROCESSED_PATH, filename), 'r')
-    print('loading {}'.format(filename))
-    data = []
-    lines = file.readlines()
-    for line in tqdm(lines):
-        ids = [int(id_) for id_ in line.split()]
-        data.append(ids)
-    return data
+
+def train_test_split(inputs, targets, train_ratio):
+    indx = list(range(len(inputs)))
+    random.shuffle(indx)
+    train_length = int(len(inputs) * train_ratio)
+
+    train_input = [inputs[i] for i in indx[:train_length]]
+    train_target = [targets[i] for i in indx[:train_length]]
+
+    test_input = [inputs[i] for i in indx[train_length:]]
+    test_target = [targets[i] for i in indx[train_length:]]
+
+    return train_input, train_target, test_input, test_target
+
+def load_data(text_id_filename, target_file_name, mode='train'):
+    with open(os.path.join(config.PROCESSED_PATH, text_id_filename), 'r') as file:
+        print('loading {}'.format(text_id_filename))
+        data = []
+        lines = file.readlines()
+        for line in tqdm(lines):
+            ids = [int(id_) for id_ in line.split()]
+            data.append(ids)
+    
+    if mode == 'train':
+        in_file = os.path.join(config.DATA_PATH, target_file_name)
+        df = read_file(in_file)
+        targets = df.iloc[:, 2:].values
+
+        train_input, train_target, test_input, test_target = train_test_split(data, targets, config.TRAIN_TEST_RATIO)
+    
+        return train_input, train_target, test_input, test_target
+    
+    if mode == 'test':
+        in_file = os.path.join(config.DATA_PATH, target_file_name)
+        df = read_file(in_file)
+        ids = df.iloc[:, 0]
+        return data, ids 
 
 
 def _reshape_batch(inputs, size, batch_size):
@@ -197,14 +224,14 @@ def _get_buckets():
 
 
 def process_data():
-    # download_data()
-    # print('Preparing data to be model-ready ...')
-    # build_vocab('train.csv')
-    # token2id('train.csv')
+    download_data()
+    print('Preparing data to be model-ready ...')
+    build_vocab('train.csv')
+    token2id('train.csv')
     token2id('test.csv', 'test_ids.txt')
 
 
-def _pad_input(input_, size):
+def _pad_input(input_, size=config.MAX_SEQ_LENGTH):
     if len(input_) > config.MAX_SEQ_LENGTH:
         output = input_[:config.MAX_SEQ_LENGTH]
     else:
@@ -212,37 +239,27 @@ def _pad_input(input_, size):
 
     return output
 
-def get_batch(data, filename, batch_size=1):
+def get_batch(data, target, batch_size=None):
     """ Return one batch to feed into the model """
-
-    # TODO: should return targets
-
     # only pad to the max length of the bucket
+    if not batch_size:
+        batch_size = len(data)
+
+    indx = list(range(len(data)))
+    random.shuffle(indx)
+
+    batch_data = [data[i] for i in indx[:batch_size]]
+    if target:
+        assert len(data) == len(target)
+        batch_target = [target[i] for i in indx[:batch_size]]
+    inputs = [_pad_input(line) for line in batch_data]
+    inputs_length = [len(line) if len(line) < config.MAX_SEQ_LENGTH else config.MAX_SEQ_LENGTH for line in batch_data]
+    return inputs, batch_target, inputs_length
+
+
+def get_test_data(data, ids):
     inputs = []
     inputs_length = []
-    targets = []
-    
-    in_file = os.path.join(config.DATA_PATH, filename)
-    df = read_file(in_file)
-    index = random.sample(range(len(data)), batch_size)
-
-    for idx in index:
-        input_length = len(data[idx])
-        targets.append(df.iloc[idx, 2:].values)
-        inputs.append(list(_pad_input(data[idx], config.MAX_SEQ_LENGTH)))
-        inputs_length.append(input_length if input_length < config.MAX_SEQ_LENGTH else config.MAX_SEQ_LENGTH)
-        
-    # now we create batch-major vectors from the data selected above.
-    # batch_inputs = _reshape_batch(inputs, input_length, batch_size)
-    return inputs, targets, inputs_length
-
-def get_test_data(data, filename):
-    inputs = []
-    inputs_length = []
-    
-    in_file = os.path.join(config.DATA_PATH, filename)
-    df = read_file(in_file)
-    ids = df.iloc[:, 0]
 
     for line in data:
         if len(line) == 0:
@@ -252,7 +269,6 @@ def get_test_data(data, filename):
         inputs_length.append(len(pad_seq))
 
     return inputs, ids, inputs_length
-
 
 
 if __name__ == '__main__':

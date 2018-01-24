@@ -56,7 +56,7 @@ class SeqClassifier(object):
         if self.pre_train:
             self.embedding = tf.Variable(tf.constant(0.0,
                                                      shape=[config.VOCAB_SIZE, 
-                                                     config.GLOVE_SIZE]), trainable=False)
+                                                     config.GLOVE_SIZE]), trainable=config.TRAINABLE_EMBEDDING)
             self.embedding_init = self.embedding.assign(self._embedding_placeholder)
 
         else:
@@ -73,13 +73,13 @@ class SeqClassifier(object):
                 lstm_fw_cell = tf.contrib.rnn.GRUCell(
                     config.HIDDEN_LAYER_SIZE)
                 if self.mode == 'train':
-                    lstm_fw_cell = tf.contrib.rnn.DropoutWrapper(lstm_fw_cell)
+                    lstm_fw_cell = tf.contrib.rnn.DropoutWrapper(lstm_fw_cell, output_keep_prob=config.KEEP_PROB)
 
             with tf.variable_scope('backward'):
                 lstm_bw_cell = tf.contrib.rnn.GRUCell(
                     config.HIDDEN_LAYER_SIZE)
                 if self.mode == 'train':
-                    lstm_bw_cell = tf.contrib.rnn.DropoutWrapper(lstm_bw_cell)
+                    lstm_bw_cell = tf.contrib.rnn.DropoutWrapper(lstm_bw_cell, output_keep_prob=config.KEEP_PROB)
 
                 outputs, states = tf.nn.bidirectional_dynamic_rnn(cell_fw=lstm_fw_cell,
                                                             cell_bw=lstm_bw_cell,
@@ -93,7 +93,7 @@ class SeqClassifier(object):
 
         layer_1 = nn_layer(drop, 2 * config.HIDDEN_LAYER_SIZE, config.HIDDEN_LAYER_SIZE // 2, 'layer_1', act=tf.nn.relu)
         self.output = nn_layer(layer_1, config.HIDDEN_LAYER_SIZE // 2, config.NUM_CLASSES, 'output')
-        self.predictions = tf.nn.softmax(self.output)
+        self.predictions = tf.nn.sigmoid(self.output)
         # self.output = tf.squeeze(output)
         
 
@@ -101,7 +101,9 @@ class SeqClassifier(object):
     @lazy_property
     def _create_loss(self):
 
-        softmax = tf.nn.softmax_cross_entropy_with_logits(logits=self.output,
+        # softmax = tf.nn.softmax_cross_entropy_with_logits(logits=self.output,
+        #                                                   labels=self._target, dim=0)
+        softmax = tf.nn.sigmoid_cross_entropy_with_logits(logits=self.output,
                                                           labels=self._target)
 
         self.losses = tf.reduce_mean(softmax)
@@ -110,7 +112,7 @@ class SeqClassifier(object):
 
     @lazy_property
     def _accuracy(self):
-        correct_prediction = tf.equal(tf.argmax(self._target, 1), tf.argmax(self.output, 1))
+        correct_prediction = tf.equal(tf.argmax(self._target, 1), tf.argmax(self.predictions, 1))
         self.accuracy = (tf.reduce_mean(tf.cast(correct_prediction, tf.float32))) * 100 
 
 
@@ -123,8 +125,9 @@ class SeqClassifier(object):
             if self.mode == 'train':
                 self.learning_rate = tf.train.exponential_decay(config.LR, self.global_step,
                                            10000, 0.96, staircase=True)
-                self.optimizer = tf.train.GradientDescentOptimizer(self.learning_rate)
-                # self.optimizer = tf.train.AdamOptimizer()
+                # self.optimizer = tf.train.GradientDescentOptimizer(self.learning_rate)
+                self.optimizer = tf.train.AdamOptimizer(self.learning_rate)
+                # self.optimizer = tf.train.RMSPropOptimizer(self.learning_rate)
                 trainbales = tf.trainable_variables()
                 start = time.time()
                 clipped_grads, self.gradient_norms = tf.clip_by_global_norm(tf.gradients(self.losses, trainbales), config.MAX_GRAD_NORM)

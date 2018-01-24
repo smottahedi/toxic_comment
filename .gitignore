@@ -4,3 +4,7 @@
 *.zip
 *.pyc
 *.txt
+data/checkpoints/*
+*.meta
+*.index
+*.data-*
