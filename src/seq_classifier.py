@@ -53,22 +53,23 @@ class SeqClassifier(object):
 
     @lazy_property
     def _create_embedding(self):
-        if self.pre_train:
-            self.embedding = tf.Variable(tf.constant(0.0,
-                                                     shape=[config.VOCAB_SIZE, 
-                                                     config.GLOVE_SIZE]), trainable=config.TRAINABLE_EMBEDDING)
-            self.embedding_init = self.embedding.assign(self._embedding_placeholder)
+        with tf.name_scope('Embeddings'):
+            if self.pre_train:
+                self.embedding = tf.Variable(tf.constant(0.0,
+                                                        shape=[config.VOCAB_SIZE, 
+                                                        config.GLOVE_SIZE]), trainable=config.TRAINABLE_EMBEDDING)
+                self.embedding_init = self.embedding.assign(self._embedding_placeholder)
 
-        else:
-            self.embedding = tf.Variable(tf.random_uniform(
-                [config.VOCAB_SIZE, config.EMBEDDING_DIMENSION], -1.0, 1.0))
+            else:
+                self.embedding = tf.Variable(tf.random_uniform(
+                    [config.VOCAB_SIZE, config.EMBEDDING_DIMENSION], -1.0, 1.0))
 
     @lazy_property
     def _inference(self):
 
         embed = tf.nn.embedding_lookup(self.embedding, self._inputs)
 
-        with tf.name_scope('biGRU'):
+        with tf.name_scope('Bi-GRU'):
             with tf.variable_scope('forward'):
                 lstm_fw_cell = tf.contrib.rnn.GRUCell(
                     config.HIDDEN_LAYER_SIZE)
@@ -86,10 +87,11 @@ class SeqClassifier(object):
                                                             inputs=embed,
                                                             sequence_length=self._seq_length,
                                                             dtype=tf.float32,
-                                                            scope='Bi-LSTM')
+                                                            scope='Bi-GRU')
         states = tf.concat(values=states, axis=1)
-        attention_output, alphas = attention(outputs, config.ATTENTION_SIZE)
-        drop = tf.nn.dropout(attention_output, config.KEEP_PROB)
+        with tf.name_scope('Attention'):
+            attention_output, self.alphas = attention(outputs, config.ATTENTION_SIZE, return_alphas=config.RETURN_ALPHA)
+            drop = tf.nn.dropout(attention_output, config.KEEP_PROB)
 
         layer_1 = nn_layer(drop, 2 * config.HIDDEN_LAYER_SIZE, config.HIDDEN_LAYER_SIZE // 2, 'layer_1', act=tf.nn.relu)
         self.output = nn_layer(layer_1, config.HIDDEN_LAYER_SIZE // 2, config.NUM_CLASSES, 'output')
@@ -100,13 +102,15 @@ class SeqClassifier(object):
 
     @lazy_property
     def _create_loss(self):
+    
+    # softmax = tf.nn.softmax_cross_entropy_with_logits(logits=self.output,
+    #                                                   labels=self._target, dim=0)
 
-        # softmax = tf.nn.softmax_cross_entropy_with_logits(logits=self.output,
-        #                                                   labels=self._target, dim=0)
-        softmax = tf.nn.sigmoid_cross_entropy_with_logits(logits=self.output,
-                                                          labels=self._target)
-
-        self.losses = tf.reduce_mean(softmax)
+        with tf.name_scope('loss'):
+            softmax = tf.nn.sigmoid_cross_entropy_with_logits(logits=self.output,
+                                                        labels=self._target)
+            self.losses = tf.reduce_mean(softmax)
+        tf.summary.scalar('losses', self.losses)
 
 
 
@@ -123,11 +127,11 @@ class SeqClassifier(object):
                                            name='global_step')
             
             if self.mode == 'train':
-                self.learning_rate = tf.train.exponential_decay(config.LR, self.global_step,
-                                           10000, 0.96, staircase=True)
-                # self.optimizer = tf.train.GradientDescentOptimizer(self.learning_rate)
+                with tf.name_scope('learning_rate'):
+                    self.learning_rate = tf.train.exponential_decay(config.LR, self.global_step,
+                                            10000, 0.96, staircase=True)
+                    tf.summary.scalar('learning_rate', self.learning_rate)
                 self.optimizer = tf.train.AdamOptimizer(self.learning_rate)
-                # self.optimizer = tf.train.RMSPropOptimizer(self.learning_rate)
                 trainbales = tf.trainable_variables()
                 start = time.time()
                 clipped_grads, self.gradient_norms = tf.clip_by_global_norm(tf.gradients(self.losses, trainbales), config.MAX_GRAD_NORM)
@@ -140,7 +144,7 @@ class SeqClassifier(object):
         self._create_embedding
         self._inference
         self._create_loss
-        self._accuracy
+        # self._accuracy
         self._create_optimizer
 
 

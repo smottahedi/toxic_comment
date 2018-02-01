@@ -4,7 +4,7 @@
 if [ "$1" == "train" ]
 then
     python src/train.py train
-elif [ $1 == "predict" ]
+elif [ "$1" == "predict" ]
 then
     python src/train.py test
 else

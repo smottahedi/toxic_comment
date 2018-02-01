@@ -8,3 +8,4 @@ data/checkpoints/*
 *.meta
 *.index
 *.data-*
+*.mfc-XPS

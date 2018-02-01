@@ -11,7 +11,6 @@ from tqdm import tqdm
 import pandas as pd
 import numpy as np
 
-
 os.environ['TF_CPP_MIN_LOG_LEVEL']='2'
 
 
@@ -38,7 +37,7 @@ def _check_restore_parameters(sess, saver):
         print("Initializing fresh parameters")
 
 
-def run_step(sess, model, inputs, seq_length, mode, targets=None):
+def run_step(sess, model, inputs, seq_length, mode, summary, targets=None):
     """ Run one step in training."""
     
 
@@ -52,28 +51,34 @@ def run_step(sess, model, inputs, seq_length, mode, targets=None):
 
     # output feed: depends on whether we do a backward step or not.
     if mode == 'train':
-        output_feed = [model.train_ops,  # update op that does SGD.
+        output_feed = [summary,
+                       model.train_ops,  # update op that does SGD.
                        model.gradient_norms,  # gradient norm.
-                       model.losses,
-                       model.accuracy]  # loss for this batch.
+                       model.losses]  # loss for this batch.
     elif mode == 'test':
         output_feed = [model.predictions]  # loss for this batch.
 
-    elif mode == 'val':
+    elif mode == 'val' and config.RETURN_ALPHA:
+        output_feed = [model.losses, model.alphas]
+    elif mode == 'val' and not config.RETURN_ALPHA:
         output_feed = [model.losses]
+
 
 
 
     outputs = sess.run(output_feed, input_feed)
     if mode == 'train':
-        return outputs[1], outputs[2], outputs[3], None  # Gradient norm, loss, no outputs.
+        return outputs[0], outputs[2], outputs[3], None  # Gradient norm, loss, no outputs.
     elif mode == 'test':
         return outputs  # No gradient norm, loss, accuracy, outputs.
-    elif mode == 'val':
-        return outputs[0]
+    elif mode == 'val' and config.RETURN_ALPHA:
+        return outputs[0], outputs[1]
+    elif mode == 'val' and not config.RETURN_ALPHA:
+        return outputs[0], None
 
 def early_stopping(loss, patience, delta=0.001):
     monitor_op = lambda a, b: np.less(a, b - delta)
+
 
 
 class EarlyStopping(object):
@@ -104,11 +109,17 @@ def train():
     model.build_graph()
 
     saver = tf.train.Saver()
-
+    attention_vis = []
+    
     with tf.Session() as sess:
+
         print('running session')
         sess.run(tf.global_variables_initializer())
         _check_restore_parameters(sess, saver)
+
+        merged = tf.summary.merge_all()
+        train_writer = tf.summary.FileWriter(config.LOG_DIR + '/train', graph=tf.get_default_graph())
+
 
         if config.PRE_TRAINED:
             glove_embeddings = data.get_glove(config.GLOVE_PATH, config.VOCAB_PATH)
@@ -117,49 +128,28 @@ def train():
         iteration = model.global_step.eval()
         total_loss = 0 
         total_accuracy = 0
-        # for epoch in tqdm(range(config.EPOCHS)): 
-        early_stopping = EarlyStopping(0.0001, 10)
+        early_stopping = EarlyStopping(0.0001, 20)
         best_loss = np.inf
+
         for _ in range(config.EPOCHS):
             skip_step = _get_skip_step(iteration)
             inputs, targets, seq_length = data.get_batch(train_input, train_target, batch_size=config.BATCH_SIZE)
         
             start = time.time()
-            step_grad_norm, step_loss, step_accuracy, _ = run_step(sess, model, inputs, seq_length, 'train', targets)
-
+            summary, step_grad_norm, step_loss, _ = run_step(sess, model, inputs, seq_length, 'train', merged, targets)
+            
+            train_writer.add_summary(summary)
             total_loss += step_loss
             iteration += 1
             
-
-            # # if iteration % skip_step == 0:
-            # if iteration % 10 == 0:
-            #     print('Iter {}:  loss {}, grad_norm {}, time {}'.format(iteration,
-            #                                              total_loss/skip_step,
-            #                                              step_grad_norm/skip_step,
-            #                                              time.time() - start))
-            #     start = time.time()
-            #     total_loss = 0
-            #     total_accuracy = 0 
-            #     saver.save(sess, os.path.join(config.CPT_PATH, 'SeqClassifier'), global_step=model.global_step)
-            #     # if iteration % (10 * skip_step) == 0:
-            #     inputs, targets, seq_length = data.get_batch(test_input, test_target, batch_size=config.BATCH_SIZE)
-            #     step_loss = run_step(sess, model, inputs, seq_length, 'val', targets)
-            #     print('validation loss: {}'.format(step_loss))
-            #     start = time.time()
-            #     sys.stdout.flush()
-            #     if early_stopping.update(step_loss):
-            #         print('early stopping')
-            #         break
-
-
-            # if iteration % (10 * skip_step) == 0:
             inputs, targets, seq_length = data.get_batch(test_input, test_target, batch_size=config.BATCH_SIZE)
-            val_loss = run_step(sess, model, inputs, seq_length, 'val', targets)
+            val_loss, alphas = run_step(sess, model, inputs, seq_length, mode='val', summary=None, targets=targets)
             print('Iter {}:  loss: {}, validation loss: {} grad_norm: {}, time {}'.format(iteration,
                                                         step_loss,
                                                         val_loss,
                                                         step_grad_norm,
                                                         time.time() - start))
+            
             start = time.time()
             sys.stdout.flush()
             if early_stopping.update(step_loss):
@@ -168,8 +158,14 @@ def train():
             if val_loss < best_loss:
                 best_loss = val_loss
                 saver.save(sess, os.path.join(config.CPT_PATH, 'SeqClassifier'), global_step=model.global_step)
+            
+            if config.RETURN_ALPHA:
+                attention_vis.append({str(a): b for a, b in zip(inputs[0], alphas[0])})
 
-
+    if config.RETURN_ALPHA:
+        with open('./data/attention_viz.pickle', 'wb') as f:
+            from pickle import dump
+            dump(attention_vis, f)
 
 
 
@@ -183,12 +179,15 @@ def predict():
     saver = tf.train.Saver()
     outputs = []
     with tf.Session() as sess:
+        merged = tf.summary.merge_all()
+        test_writer = tf.summary.FileWriter(config.LOG_DIR + '/test',graph=tf.get_default_graph())
         print('running test session')
         sess.run(tf.global_variables_initializer())
         _check_restore_parameters(sess, saver)
         for i in tqdm(range(len(inputs))):
-            output = run_step(sess, model, [inputs[i]], [inputs_length[i]], targets=None, mode='test')
+            output = run_step(sess, model, [inputs[i]], [inputs_length[i]], targets=None, mode='test', summary=None)
             outputs.append(output[0])
+            # test_writer.add_summary(summary, i)
     list_classes = ["toxic", "severe_toxic", "obscene", "threat", "insult", "identity_hate"]
     outputs = np.asarray(outputs).reshape((-1, 6))
     df = pd.DataFrame(outputs, columns=list_classes)

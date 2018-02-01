@@ -14,7 +14,6 @@ import numpy as np
 from tqdm import tqdm
 
 def download_data():
-    print(os.getcwd())
     train_url = 'https://www.kaggle.com/c/jigsaw-toxic-comment-classification-challenge/download/train.csv.zip'
     test_url = 'https://www.kaggle.com/c/jigsaw-toxic-comment-classification-challenge/download/test.csv.zip'
     glove_url = 'http://nlp.stanford.edu/data/glove.6B.zip'
@@ -152,7 +151,7 @@ def token2id(filename, out_path='train_ids.txt'):
     df = read_file(in_file)
     out_file = open(os.path.join(config.PROCESSED_PATH, out_path), 'w')
     
-    lines = df.comment_text.fillna('NA').values
+    lines = df.comment_text.fillna('N/A').values
     print('token to ids')
     for line in tqdm(lines):
         ids = sentence2id(vocab, line)
@@ -223,13 +222,6 @@ def _get_buckets():
     return data_buckets, train_buckets_scale
 
 
-def process_data():
-    download_data()
-    print('Preparing data to be model-ready ...')
-    build_vocab('train.csv')
-    token2id('train.csv')
-    token2id('test.csv', 'test_ids.txt')
-
 
 def _pad_input(input_, size=config.MAX_SEQ_LENGTH):
     if len(input_) > config.MAX_SEQ_LENGTH:
@@ -269,6 +261,13 @@ def get_test_data(data, ids):
         inputs_length.append(len(pad_seq))
 
     return inputs, ids, inputs_length
+
+def process_data():
+    download_data()
+    print('Preparing data to be model-ready ...')
+    build_vocab('train.csv')
+    token2id('train.csv')
+    token2id('test.csv', 'test_ids.txt')
 
 
 if __name__ == '__main__':

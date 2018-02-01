@@ -1,5 +1,5 @@
 import tensorflow as tf
-
+import config
 
 def attention(inputs, attention_size, return_alphas=True):
     """
@@ -61,6 +61,6 @@ def attention(inputs, attention_size, return_alphas=True):
     output = tf.reduce_sum(inputs * tf.expand_dims(alphas, -1), 1)
 
     if not return_alphas:
-        return output
+        return output, None
     else:
         return output, alphas

@@ -121,7 +121,6 @@ In this \href{https://www.kaggle.com/c/jigsaw-toxic-comment-classification-chall
 capable of detecting different types of of toxicity like threats, obscenity,
 insults, and identity-based hate.
 
-% Mention multi-label classification
 
 \section{Datasets and inputs}
 
@@ -138,8 +137,6 @@ The \href{https://www.kaggle.com/c/jigsaw-toxic-comment-classification-challenge
 
 
 The data will be divided in to 3:1:1 for training validation and testing. Since the labels are not balanced, during the training each batch of data will be sampled using a Stratified sampling method to expose the model to different class labels.
-
-
 
 
 
@@ -188,7 +185,7 @@ Since class labels are not mutually exclusive, a multi-label classification loss
         \item Python 3.5
         \item Pandas
         \item Nltk
-        \item Tensorflow (1.4)
+        \item TensorFlow (1.4)
 \end{itemize}
 
 
@@ -206,7 +203,7 @@ An important part any natural language processing is cleaning and processing tex
 
 \subsection{Model Definition}
 
-The Tensorflow model will be place in a Python class with necessary interface for creating the compute graph. Also, class methods are decorated with modified version of the property decorator since it's not desirable to create a new graph component each time the method is class during training to inference. The code Snippet below shows the basic structure of the model class and decorator.
+The TensorFlow model will be place in a Python class with necessary interface for creating the compute graph. Also, class methods are decorated with modified version of the property decorator since it's not desirable to create a new graph component each time the method is class during training to inference. The code Snippet below shows the basic structure of the model class and decorator.
 
 
 \begin{python}
