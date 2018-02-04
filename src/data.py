@@ -256,6 +256,15 @@ def token2id(filename, out_path):
         ids = sentence2id(vocab, line)
         out_file.write(' '.join(str(id_) for id_ in ids) + '\n')
         
+def grouper_it(iterable, n):
+    it = iter(iterable)
+    while True:
+        chunk_it = itertools.islice(it, n)
+        try:
+            first_el = next(chunk_it)
+        except StopIteration:
+            return
+        yield itertools.chain((first_el,), chunk_it)
 
 
 def train_test_split(inputs, targets, train_ratio):
@@ -341,7 +350,7 @@ def get_test_data(data, ids):
             line = [1]
         pad_seq = list(_pad_input(line, config.MAX_SEQ_LENGTH))
         inputs.append(pad_seq)
-        inputs_length.append(len(pad_seq))
+        inputs_length.append(len(line))
 
     return inputs, ids, inputs_length
 

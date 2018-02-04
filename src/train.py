@@ -184,12 +184,21 @@ def predict():
         print('running test session')
         sess.run(tf.global_variables_initializer())
         _check_restore_parameters(sess, saver)
-        for i in tqdm(range(len(inputs))):
-            output = run_step(sess, model, [inputs[i]], [inputs_length[i]], targets=None, mode='test', summary=None)
+
+
+        num_chunks = 2000
+        inputs_length_iterator = data.grouper_it(iterable=inputs_length, n=num_chunks)
+
+        for input_chunk in tqdm(data.grouper_it(iterable=inputs, n=num_chunks)):
+
+            input_length = list(next(inputs_length_iterator))
+            output = run_step(sess, model, list(input_chunk), input_length, targets=None, mode='test', summary=None)
             outputs.append(output[0])
             # test_writer.add_summary(summary, i)
+
+
     list_classes = ["toxic", "severe_toxic", "obscene", "threat", "insult", "identity_hate"]
-    outputs = np.asarray(outputs).reshape((-1, 6))
+    outputs = np.concatenate(outputs)
     df = pd.DataFrame(outputs, columns=list_classes)
     df.insert(0, 'id', ids)
     df.to_csv(os.path.join(config.DATA_PATH, 'submit.csv'), index=False)
