@@ -128,7 +128,7 @@ def train():
         iteration = model.global_step.eval()
         total_loss = 0 
         total_accuracy = 0
-        early_stopping = EarlyStopping(0.0001, 20)
+        early_stopping = EarlyStopping(0.0, 50)
         best_loss = np.inf
 
         for _ in range(config.EPOCHS):

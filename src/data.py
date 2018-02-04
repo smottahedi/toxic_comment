@@ -2,6 +2,9 @@ from nltk.tokenize import word_tokenize
 from nltk.tokenize import RegexpTokenizer
 from nltk.corpus import stopwords
 from nltk.stem import PorterStemmer 
+from nltk.stem.wordnet import WordNetLemmatizer
+
+import time
 import re
 import pandas as pd
 from zipfile import ZipFile
@@ -12,6 +15,58 @@ import random
 from urllib.request import urlretrieve 
 import numpy as np
 from tqdm import tqdm
+import gc 
+
+from gensim.models.phrases import Phraser, Phrases
+from gensim.models.word2vec import LineSentence
+from gensim.corpora import Dictionary
+from textacy import preprocess
+import multiprocessing
+import itertools
+
+
+replace_numbers = re.compile(r'\d+',re.IGNORECASE)
+porter_stemmer = PorterStemmer()
+wordnet_lemmatizer = WordNetLemmatizer()
+tokenize = RegexpTokenizer(r'\w+')
+alpha_numeric = re.compile('[\W_]+')
+
+with open(os.path.join(config.DATA_PATH, 'bad_words_en.txt'), 'r') as f:
+    bad_words = f.read().split('\n')[:-1]
+
+def substitute_repeats_fixed_len(text, num_chars, num_times=3):
+    return re.sub(r"(\S{{{}}})(\1{{{},}})".format(num_chars, num_times-1), r"\1", text)
+
+def substitute_repeats(text, num_times=3):
+    for num_chars in range(1, 20):
+        text = substitute_repeats_fixed_len(text, num_chars, num_times)
+    return text
+
+def split_text_and_digits(text, regexps=None):
+    if not regexps:
+        regexps = [re.compile("([a-zA-Z]+)([0-9]+)"),
+                   re.compile("([0-9]+)([a-zA-Z]+)")]
+    for regexp in regexps:
+        result = regexp.match(text)
+        if result is not None:
+            return ' '.join(result.groups())
+    return text
+
+def is_bad(token):
+    token = token.lower()
+    bads = set()
+    for word in bad_words:
+        if word in token:
+            if word == token:
+                bads.add(token)
+            else:
+                bads.add(token)
+                bads.add(word)
+    
+    if bads:
+        return ' '.join(bads)
+    else:
+        return token
 
 def download_data():
     train_url = 'https://www.kaggle.com/c/jigsaw-toxic-comment-classification-challenge/download/train.csv.zip'
@@ -43,7 +98,7 @@ def make_dir(path):
         pass
 
 def get_glove(path_to_glove, vocab_path):
-    _, word2index_map = load_vocab(vocab_path)
+    vocab = load_vocab(vocab_path)
     embedding_weights = {}
     count_all_words = 0 
     embed = []
@@ -53,7 +108,7 @@ def get_glove(path_to_glove, vocab_path):
             for line in tqdm(f):
                 vals = line.split()
                 word = str(vals[0].decode("utf-8")) 
-                if word in word2index_map:
+                if word in vocab.itervalues():
                     count_all_words+=1
                     coefs = np.asarray(vals[1:], dtype='float32')
                     coefs /= np.linalg.norm(coefs)
@@ -63,7 +118,7 @@ def get_glove(path_to_glove, vocab_path):
                         break
         embedding_matrix = np.zeros((config.VOCAB_SIZE, config.GLOVE_SIZE))
         print('filling embedding matrix')
-        for word, index in tqdm(word2index_map.items()):
+        for index, word in tqdm(vocab.items(), total=config.VOCAB_SIZE):
             if not word == "<pad>":
                 try:
                     word_embedding = embedding_weights[word]
@@ -73,28 +128,66 @@ def get_glove(path_to_glove, vocab_path):
     return embedding_matrix
 
 
-def sentence_tokenizer(sentence, stem=False, stopword=True, normalize_numbers=True):
-    sentence = sentence.lower()
-    if normalize_numbers:
-        replace_numbers = re.compile(r'\d+',re.IGNORECASE)
-        sentence = replace_numbers.sub('number', sentence)
-    tokenizer = RegexpTokenizer(r'\w+')
-    sentence = tokenizer.tokenize(sentence)
-    sentence = [word for word in sentence if word not in string.punctuation]
-    sentence = [word for word in sentence if len(word)>1]
+def parallelize_dataframe(comments, func):
+    num_cores = multiprocessing.cpu_count() - 1  #leave one free to not freeze machine
+    num_partitions = num_cores #number of partitions to split dataframe
+    comments_split = np.array_split(comments, num_partitions)
+    pool = multiprocessing.Pool(num_cores)
+    output = np.concatenate(pool.map(func, comments_split))
+    pool.close()
+    pool.join()
+    return output
+
+
+def my_preprocess(sentence, stopword=1, stem=0, lemma=1):
+    sentence = alpha_numeric.sub(' ', sentence)
+    sentence = replace_numbers.sub(' number ', sentence)
+    sentence = tokenize.tokenize(sentence)
+    sentence = [split_text_and_digits(token) for token in sentence]
+    sentence = [substitute_repeats(token, 3) for token in sentence]
+    sentence = [is_bad(token) for token in sentence]
+    
+    sentence = [word for word in sentence if len(word) > 1]
     if stopword:
         sentence = [word for word in sentence if not word in stopwords.words('english')]
     if stem:
-        porter_stemmer = PorterStemmer()
         sentence = [porter_stemmer.stem(word) for word in sentence]
+    if lemma: 
+        sentence = [wordnet_lemmatizer.lemmatize(word) for word in sentence]
 
-    return sentence
+    return ' '.join(sentence)
+
+def tokenizer(sentences):
+    y = []
+    if type(sentences) == str:
+        sentences = [sentences]
+    for comment in sentences:
+        comment = my_preprocess(comment)
+        txt = preprocess.normalize_whitespace(comment)
         
+        txt = preprocess.preprocess_text(txt, 
+                                         fix_unicode=True, 
+                                         lowercase=True, 
+                                         transliterate=True, 
+                                         no_urls=True, 
+                                         no_emails=True,
+                                         no_phone_numbers=True,
+                                         no_numbers=True,
+                                         no_currency_symbols=True, 
+                                         no_punct=True,
+                                         no_contractions=True,
+                                         no_accents=True)
+
+        y.append(u''.join(txt))
+    return y
         
-        
-def build_vocab(filename):
-    in_path = os.path.join(config.DATA_PATH, filename)
-    out_path = os.path.join(config.PROCESSED_PATH, 'vocab.txt')
+def build_vocab():
+    start = time.time()
+    test_path = os.path.join(config.DATA_PATH, 'test.csv')
+    train_path = os.path.join(config.DATA_PATH, 'train.csv')
+    normalized_text_path = os.path.join(config.PROCESSED_PATH, 'normalized_comments.txt')
+    bigram_path = os.path.join(config.PROCESSED_PATH, 'bigram')
+    bigram_comments_path = os.path.join(config.PROCESSED_PATH, 'bigram_commnets.txt')
     
     if config.PROCESSED_PATH not in os.listdir(config.DATA_PATH):
         try:
@@ -104,49 +197,54 @@ def build_vocab(filename):
 
     vocab = {}
     
-    df = read_file(in_path)
+    train_df = read_file(train_path)
+    test_df = read_file(test_path)
     print('tokenizing vocab file')
-    for line in tqdm(df.comment_text):
-        for token in sentence_tokenizer(line):
-            if token not in vocab:
-                vocab[token] = 0
-            vocab[token] += 1
-        
-    sorted_vocab = sorted(vocab, key=vocab.get, reverse=True)
-    with open(out_path, 'w') as f:
-        f.write('<pad>' + '\n')
-        f.write('<unk>' + '\n')
-        # f.write('<s>' + '\n')
-        # f.write('<\s>' + '\n') 
-        index = 4
-        print('writing vocab file')
-        for word in tqdm(sorted_vocab):
-            if vocab[word] < config.THRESHOLD:
-                with open('src/config.py', 'a') as cf:
-                        cf.write('VOCAB_SIZE = ' + str(index) + '\n')
-                break
-            f.write(word + '\n')
-            index += 1
-            
-            
+    texts =  np.concatenate([train_df.comment_text.fillna('N/A').values,
+                             test_df.comment_text.fillna('N/A').values])
+
+
+    with open(normalized_text_path, 'w') as f:
+        processed_text = parallelize_dataframe(texts, tokenizer)
+        for line in processed_text:
+            f.write(line + '\n')
+    gc.collect()
+    lines = LineSentence(normalized_text_path)
+    bigram = Phrases(lines)
+    bigram.save(bigram_path)
+    phraser = Phraser(bigram)
+
+    with open(bigram_comments_path, 'w', encoding='utf_8') as f: 
+       for comment in lines:
+            comm = u' '.join(phraser[comment])
+            f.write(comm + '\n')
+
+    commnets = LineSentence(bigram_comments_path)
+    bigram_dict = Dictionary(commnets)
+    bigram_dict.filter_extremes(no_below=config.THRESHOLD)
+    bigram_dict.save_as_text(config.VOCAB_PATH)
+    bigram_dict.add_documents([['<pad>']])
+
+    with open(os.path.join(config.ROOT, 'src', 'config.py'), 'a') as f:
+        f.write('VOCAB_SIZE = {}'.format(len(bigram_dict)))    
+
+    print('time passed: {} minutes'.format((time.time() - start) / 60))   
+
+
 def load_vocab(vocab_path):
-    with open(vocab_path, 'r') as f:
-        words = f.read().splitlines()
-    return words, {words[i]: i for i in range(len(words))}
+    dict = Dictionary.load_from_text(vocab_path)
+    return dict
     
 
-
-def sentence2id(vocab, line):
-    # return [vocab.get(token, vocab['<unk>']) for token in sentence_tokenizer(line)]
-    return [vocab.get(token, vocab['<unk>'] ) for token in sentence_tokenizer(line)]
+def sentence2id(vocab, tokens):
+    return vocab.doc2idx(tokens)
 
 
-
-def token2id(filename, out_path='train_ids.txt'):
+def token2id(filename, out_path):
     """ Convert all the tokens in the data into their corresponding
     index in the vocabulary. """
     vocab_path = 'vocab.txt'
-    _, vocab = load_vocab(os.path.join(config.PROCESSED_PATH, vocab_path))
+    vocab = load_vocab(os.path.join(config.PROCESSED_PATH, vocab_path))
     in_file = os.path.join(config.DATA_PATH, filename)
     df = read_file(in_file)
     out_file = open(os.path.join(config.PROCESSED_PATH, out_path), 'w')
@@ -154,9 +252,11 @@ def token2id(filename, out_path='train_ids.txt'):
     lines = df.comment_text.fillna('N/A').values
     print('token to ids')
     for line in tqdm(lines):
+        line = tokenizer(line)[0].split()
         ids = sentence2id(vocab, line)
         out_file.write(' '.join(str(id_) for id_ in ids) + '\n')
         
+
 
 def train_test_split(inputs, targets, train_ratio):
     indx = list(range(len(inputs)))
@@ -205,23 +305,6 @@ def _reshape_batch(inputs, size, batch_size):
                                     for batch_id in range(batch_size)], dtype=np.int32))
     return batch_inputs
 
-def _get_buckets():
-    """ Load the dataset into buckets based on their lengths.
-    train_buckets_scale is the inverval that'll help us 
-    choose a random bucket later on.
-    """
-    # test_buckets = data.load_data('test_ids.enc')
-    data_buckets = load_data('train_ids.txt')
-    train_bucket_sizes = [len(data_buckets[b]) for b in range(len(config.BUCKETS))]
-    print("Number of samples in each bucket:\n", train_bucket_sizes)
-    train_total_size = sum(train_bucket_sizes)
-    # list of increasing numbers from 0 to 1 that we'll use to select a bucket.
-    train_buckets_scale = [sum(train_bucket_sizes[:i + 1]) / train_total_size
-                           for i in range(len(train_bucket_sizes))]
-    print("Bucket scale:\n", train_buckets_scale)
-    return data_buckets, train_buckets_scale
-
-
 
 def _pad_input(input_, size=config.MAX_SEQ_LENGTH):
     if len(input_) > config.MAX_SEQ_LENGTH:
@@ -265,8 +348,8 @@ def get_test_data(data, ids):
 def process_data():
     download_data()
     print('Preparing data to be model-ready ...')
-    build_vocab('train.csv')
-    token2id('train.csv')
+    build_vocab()
+    token2id('train.csv', 'train_ids.txt')
     token2id('test.csv', 'test_ids.txt')
 
 
