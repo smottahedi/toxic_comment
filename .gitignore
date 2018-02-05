@@ -3,8 +3,9 @@
 .vscode
 *.zip
 *.pyc
-*.txt
-data/checkpoints/*
+/data/*.txt
+/data/*/*.txt
+data/checkpoints/*.*
 *.meta
 *.index
 *.data-*
