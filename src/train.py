@@ -130,9 +130,11 @@ def train():
 
         if config.PRE_TRAINED:
             if os.path.isfile(os.path.join(config.PROCESSED_PATH, 'glove_embeddings.pkl')):
+                print('load embeddings')
                 with open(os.path.join(config.PROCESSED_PATH, 'glove_embeddings.pkl'), 'rb') as f:
                     glove_embeddings = pickle.load(f)
             else:
+                print('get Glove')
                 glove_embeddings = data.get_glove(config.GLOVE_PATH, config.VOCAB_PATH)
             sess.run(model.embedding_init, feed_dict={model._embedding_placeholder:glove_embeddings})    
         
@@ -213,7 +215,8 @@ def predict():
     outputs = np.concatenate(outputs)
     df = pd.DataFrame(outputs, columns=list_classes)
     df.insert(0, 'id', ids)
-    df.to_csv(os.path.join(config.DATA_PATH, 'submit.csv'), index=False)
+    num_submission = len(os.listdir(os.path.join(config.DATA_PATH, 'submissions')))
+    df.to_csv(os.path.join(config.DATA_PATH, 'submit' + str(num_submission) + '.csv'), index=False)
 
 
 
