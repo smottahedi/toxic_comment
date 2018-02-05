@@ -5,7 +5,7 @@ Sequence classification model.
 import functools
 import time
 from attention import attention
-from nn_layer import nn_layer, variable_summaries
+from nn_layer import nn_layer, variable_summaries, column_loss
 import tensorflow as tf
 
 import config
@@ -31,7 +31,7 @@ class SeqClassifier(object):
         self.mode = mode
         self.pre_train = pre_train
         self.embedding = None
-        self.loss = None
+        self.losses = None
         self.output = None
     
     @lazy_property
@@ -74,13 +74,13 @@ class SeqClassifier(object):
                 lstm_fw_cell = tf.contrib.rnn.GRUCell(
                     config.HIDDEN_LAYER_SIZE)
                 if self.mode == 'train':
-                    lstm_fw_cell = tf.contrib.rnn.DropoutWrapper(lstm_fw_cell, output_keep_prob=config.KEEP_PROB)
+                    lstm_fw_cell = tf.contrib.rnn.DropoutWrapper(lstm_fw_cell, output_keep_prob=config.KEEP_PROB + 0.2)
 
             with tf.variable_scope('backward'):
                 lstm_bw_cell = tf.contrib.rnn.GRUCell(
                     config.HIDDEN_LAYER_SIZE)
                 if self.mode == 'train':
-                    lstm_bw_cell = tf.contrib.rnn.DropoutWrapper(lstm_bw_cell, output_keep_prob=config.KEEP_PROB)
+                    lstm_bw_cell = tf.contrib.rnn.DropoutWrapper(lstm_bw_cell, output_keep_prob=config.KEEP_PROB + 0.2)
 
                 outputs, states = tf.nn.bidirectional_dynamic_rnn(cell_fw=lstm_fw_cell,
                                                             cell_bw=lstm_bw_cell,
@@ -90,34 +90,57 @@ class SeqClassifier(object):
                                                             scope='Bi-GRU')
         states = tf.concat(values=states, axis=1)
         with tf.name_scope('Attention'):
-            attention_output, self.alphas = attention(outputs, config.ATTENTION_SIZE, return_alphas=config.RETURN_ALPHA)
-            drop = tf.nn.dropout(attention_output, config.KEEP_PROB)
+            self.attention_output, self.alphas = attention(outputs, config.ATTENTION_SIZE, return_alphas=config.RETURN_ALPHA)
+            if self.mode == 'train':
+                self.attention_output = tf.nn.dropout(self.attention_output, config.KEEP_PROB)
 
-        layer_1 = nn_layer(drop, 2 * config.HIDDEN_LAYER_SIZE, config.HIDDEN_LAYER_SIZE // 2, 'layer_1', act=tf.nn.relu)
-        self.output = nn_layer(layer_1, config.HIDDEN_LAYER_SIZE // 2, config.NUM_CLASSES, 'output')
+
+        layer_1 = nn_layer(self.attention_output, 2 * config.HIDDEN_LAYER_SIZE, config.HIDDEN_LAYER_SIZE, 'layer_1', act=tf.nn.relu)
+        layer_1 = tf.nn.dropout(layer_1, config.KEEP_PROB)
+
+        layer_2 = nn_layer(layer_1, config.HIDDEN_LAYER_SIZE, config.HIDDEN_LAYER_SIZE // 2, 'layer_2', act=tf.nn.relu)
+        layer_2 = tf.nn.dropout(layer_2, config.KEEP_PROB)
+
+        layer_3 = nn_layer(layer_2, config.HIDDEN_LAYER_SIZE // 2 , config.HIDDEN_LAYER_SIZE // 2, 'layer_3', act=tf.nn.relu)
+        layer_3 = tf.nn.dropout(layer_3, config.KEEP_PROB)
+
+        self.output = nn_layer(layer_3, config.HIDDEN_LAYER_SIZE // 2, config.NUM_CLASSES, 'output')
         self.predictions = tf.nn.sigmoid(self.output)
-        # self.output = tf.squeeze(output)
         
+    @lazy_property
+    def _multi_task_loss(self):
+        mtl_layer_1 = nn_layer(self.attention_output, 2 * config.HIDDEN_LAYER_SIZE, config.HIDDEN_LAYER_SIZE, 'mtl_layer_1', act=tf.nn.relu)
+        mtl_layer_1 = tf.nn.dropout(mtl_layer_1, config.KEEP_PROB)
+
+        mtl_layer_2 = nn_layer(mtl_layer_1, config.HIDDEN_LAYER_SIZE, config.HIDDEN_LAYER_SIZE // 2, 'mtl_layer_2', act=tf.nn.relu)
+        mtl_layer_2 = tf.nn.dropout(mtl_layer_2, config.KEEP_PROB)
+
+        self.mlt_output = nn_layer(mtl_layer_2, config.HIDDEN_LAYER_SIZE // 2, 1, 'mtl_output', act=None)
+        self.mlt_logit = tf.nn.sigmoid(tf.squeeze(self.mlt_output))
+
 
 
     @lazy_property
     def _create_loss(self):
-    
-    # softmax = tf.nn.softmax_cross_entropy_with_logits(logits=self.output,
-    #                                                   labels=self._target, dim=0)
 
         with tf.name_scope('loss'):
-            softmax = tf.nn.sigmoid_cross_entropy_with_logits(logits=self.output,
-                                                        labels=self._target)
-            self.losses = tf.reduce_mean(softmax)
-        tf.summary.scalar('losses', self.losses)
+            mtl_target = tf.reduce_any(tf.cast(self._target, dtype=tf.bool), axis=1)
+            mtl_loss = tf.losses.log_loss(predictions=self.mlt_logit,
+                                          labels=mtl_target)
 
+            loss = tf.nn.sigmoid_cross_entropy_with_logits(logits=self.output,
+                                                        labels=self._target)
+            self.losses = tf.reduce_mean(loss) + tf.reduce_mean(mtl_loss)
+        tf.summary.scalar('losses', self.losses)
+        tf.summary.scalar('mtl loss', tf.reduce_mean(mtl_loss))
 
 
     @lazy_property
     def _accuracy(self):
-        correct_prediction = tf.equal(tf.argmax(self._target, 1), tf.argmax(self.predictions, 1))
-        self.accuracy = (tf.reduce_mean(tf.cast(correct_prediction, tf.float32))) * 100 
+        self.accuracy = column_loss(label=self._target,
+                                    pred=self.predictions, 
+                                    func=tf.metrics.auc)
+        tf.summary.scalar('roc_auc', self.accuracy)
 
 
     @lazy_property
@@ -136,15 +159,16 @@ class SeqClassifier(object):
                 start = time.time()
                 clipped_grads, self.gradient_norms = tf.clip_by_global_norm(tf.gradients(self.losses, trainbales), config.MAX_GRAD_NORM)
                 self.train_ops = self.optimizer.apply_gradients(zip(clipped_grads, trainbales), global_step=self.global_step)
-                print('creating opt took {} seonds'.format(time.time() - start))
+                print('creating opt took {} seconds'.format(time.time() - start))
 
 
     def build_graph(self):
         self._create_placeholders
         self._create_embedding
         self._inference
+        self._multi_task_loss
         self._create_loss
-        # self._accuracy
+        self._accuracy
         self._create_optimizer
 
 
