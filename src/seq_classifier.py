@@ -74,13 +74,13 @@ class SeqClassifier(object):
                 lstm_fw_cell = tf.contrib.rnn.GRUCell(
                     config.HIDDEN_LAYER_SIZE)
                 if self.mode == 'train':
-                    lstm_fw_cell = tf.contrib.rnn.DropoutWrapper(lstm_fw_cell, output_keep_prob=config.KEEP_PROB)
+                    lstm_fw_cell = tf.contrib.rnn.DropoutWrapper(lstm_fw_cell, output_keep_prob=config.KEEP_PROB + 0.2)
 
             with tf.variable_scope('backward'):
                 lstm_bw_cell = tf.contrib.rnn.GRUCell(
                     config.HIDDEN_LAYER_SIZE)
                 if self.mode == 'train':
-                    lstm_bw_cell = tf.contrib.rnn.DropoutWrapper(lstm_bw_cell, output_keep_prob=config.KEEP_PROB)
+                    lstm_bw_cell = tf.contrib.rnn.DropoutWrapper(lstm_bw_cell, output_keep_prob=config.KEEP_PROB + 0.2)
 
                 outputs, states = tf.nn.bidirectional_dynamic_rnn(cell_fw=lstm_fw_cell,
                                                             cell_bw=lstm_bw_cell,
@@ -95,8 +95,16 @@ class SeqClassifier(object):
                 attention_output = tf.nn.dropout(attention_output, config.KEEP_PROB)
 
 
-        layer_1 = nn_layer(attention_output, 2 * config.HIDDEN_LAYER_SIZE, config.HIDDEN_LAYER_SIZE // 2, 'layer_1', act=tf.nn.relu)
-        self.output = nn_layer(layer_1, config.HIDDEN_LAYER_SIZE // 2, config.NUM_CLASSES, 'output')
+        layer_1 = nn_layer(attention_output, 2 * config.HIDDEN_LAYER_SIZE, config.HIDDEN_LAYER_SIZE, 'layer_1', act=tf.nn.relu)
+        layer_1 = tf.nn.dropout(layer_1, config.KEEP_PROB)
+
+        layer_2 = nn_layer(layer_1, config.HIDDEN_LAYER_SIZE, config.HIDDEN_LAYER_SIZE // 2, 'layer_1', act=tf.nn.relu)
+        layer_2 = tf.nn.dropout(layer_2, config.KEEP_PROB)
+
+        layer_3 = nn_layer(layer_2, config.HIDDEN_LAYER_SIZE // 2 , config.HIDDEN_LAYER_SIZE // 2, 'layer_1', act=tf.nn.relu)
+        layer_3 = tf.nn.dropout(layer_3, config.KEEP_PROB)
+
+        self.output = nn_layer(layer_3, config.HIDDEN_LAYER_SIZE // 2, config.NUM_CLASSES, 'output')
         self.predictions = tf.nn.sigmoid(self.output)
         
 
@@ -107,7 +115,6 @@ class SeqClassifier(object):
         with tf.name_scope('loss'):
             softmax = tf.nn.sigmoid_cross_entropy_with_logits(logits=self.output,
                                                         labels=self._target)
-            # auc_score = tf.metrics.auc()
             self.losses = tf.reduce_mean(softmax)
         tf.summary.scalar('losses', self.losses)
 

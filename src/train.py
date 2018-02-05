@@ -155,7 +155,7 @@ def train():
             
             inputs, targets, seq_length = data.get_batch(test_input, test_target, batch_size=config.BATCH_SIZE)
             val_loss, accuracy, alphas = run_step(sess, model, inputs, seq_length, mode='val', summary=None, targets=targets)
-            print('Iter {}:  loss: {}, validation loss: {} accuracy: {} grad_norm: {}, time {}'.format(iteration,
+            print('Iter {}:  loss: {}, validation loss: {} auc: {} grad_norm: {}, time {}'.format(iteration,
                                                         step_loss,
                                                         val_loss,
                                                         accuracy,
