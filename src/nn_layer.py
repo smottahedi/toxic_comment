@@ -1,5 +1,18 @@
 import tensorflow as tf
 
+def column_loss(pred, label, func):
+    L = tf.split(label, [1,1,1,1,1,1], 1)
+    P = tf.split(pred, [1,1,1,1,1,1], 1)
+    
+    lossess = []
+    for i in range(6):
+        loss = func(labels=tf.squeeze(L[i]),
+                predictions=tf.squeeze(P[i]))
+        lossess.append(loss)
+        
+    return tf.reduce_mean(lossess)
+
+
 
 def weight_variable(shape):
     """Create a weight variable with appropriate initialization."""

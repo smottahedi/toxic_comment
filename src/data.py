@@ -16,6 +16,8 @@ from urllib.request import urlretrieve
 import numpy as np
 from tqdm import tqdm
 import gc 
+import pickle
+
 
 from gensim.models.phrases import Phraser, Phrases
 from gensim.models.word2vec import LineSentence
@@ -125,6 +127,9 @@ def get_glove(path_to_glove, vocab_path):
                     embedding_matrix[index, :] = word_embedding
                 except:
                     pass
+    if not os.path.isfile(os.path.join(config.PROCESSED_PATH, 'glove_embeddings.pkl')):
+        with open(os.path.join(config.PROCESSED_PATH, 'glove_embeddings.pkl'), 'wb') as f:
+            pickle.dump(embedding_matrix, f)
     return embedding_matrix
 
 

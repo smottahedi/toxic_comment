@@ -10,6 +10,7 @@ import sys
 from tqdm import tqdm
 import pandas as pd
 import numpy as np
+import pickle
 
 os.environ['TF_CPP_MIN_LOG_LEVEL']='2'
 
@@ -51,17 +52,21 @@ def run_step(sess, model, inputs, seq_length, mode, summary, targets=None):
 
     # output feed: depends on whether we do a backward step or not.
     if mode == 'train':
+        model.mode = 'train'
         output_feed = [summary,
                        model.train_ops,  # update op that does SGD.
                        model.gradient_norms,  # gradient norm.
                        model.losses]  # loss for this batch.
     elif mode == 'test':
+        model.mode = 'test'
         output_feed = [model.predictions]  # loss for this batch.
 
     elif mode == 'val' and config.RETURN_ALPHA:
+        model.mode = 'val'
         output_feed = [model.losses, model.alphas]
     elif mode == 'val' and not config.RETURN_ALPHA:
-        output_feed = [model.losses]
+        model.mode = 'val'
+        output_feed = [model.losses, model.accuracy]
 
 
 
@@ -72,11 +77,12 @@ def run_step(sess, model, inputs, seq_length, mode, summary, targets=None):
     elif mode == 'test':
         return outputs  # No gradient norm, loss, accuracy, outputs.
     elif mode == 'val' and config.RETURN_ALPHA:
-        return outputs[0], outputs[1]
-    elif mode == 'val' and not config.RETURN_ALPHA:
-        return outputs[0], None
 
-def early_stopping(loss, patience, delta=0.001):
+        return outputs[0], None, outputs[1], 
+    elif mode == 'val' and not config.RETURN_ALPHA:
+        return outputs[0], outputs[1], None
+
+def early_stopping(loss, patience, delta=0.):
     monitor_op = lambda a, b: np.less(a, b - delta)
 
 
@@ -115,6 +121,7 @@ def train():
 
         print('running session')
         sess.run(tf.global_variables_initializer())
+        sess.run(tf.initialize_local_variables())
         _check_restore_parameters(sess, saver)
 
         merged = tf.summary.merge_all()
@@ -122,13 +129,17 @@ def train():
 
 
         if config.PRE_TRAINED:
-            glove_embeddings = data.get_glove(config.GLOVE_PATH, config.VOCAB_PATH)
+            if os.path.isfile(os.path.join(config.PROCESSED_PATH, 'glove_embeddings.pkl')):
+                with open(os.path.join(config.PROCESSED_PATH, 'glove_embeddings.pkl'), 'rb') as f:
+                    glove_embeddings = pickle.load(f)
+            else:
+                glove_embeddings = data.get_glove(config.GLOVE_PATH, config.VOCAB_PATH)
             sess.run(model.embedding_init, feed_dict={model._embedding_placeholder:glove_embeddings})    
         
         iteration = model.global_step.eval()
         total_loss = 0 
         total_accuracy = 0
-        early_stopping = EarlyStopping(0.0, 50)
+        early_stopping = EarlyStopping(0.0, np.inf)
         best_loss = np.inf
 
         for _ in range(config.EPOCHS):
@@ -143,10 +154,11 @@ def train():
             iteration += 1
             
             inputs, targets, seq_length = data.get_batch(test_input, test_target, batch_size=config.BATCH_SIZE)
-            val_loss, alphas = run_step(sess, model, inputs, seq_length, mode='val', summary=None, targets=targets)
-            print('Iter {}:  loss: {}, validation loss: {} grad_norm: {}, time {}'.format(iteration,
+            val_loss, accuracy, alphas = run_step(sess, model, inputs, seq_length, mode='val', summary=None, targets=targets)
+            print('Iter {}:  loss: {}, validation loss: {} accuracy: {} grad_norm: {}, time {}'.format(iteration,
                                                         step_loss,
                                                         val_loss,
+                                                        accuracy,
                                                         step_grad_norm,
                                                         time.time() - start))
             

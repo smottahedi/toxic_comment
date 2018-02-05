@@ -5,7 +5,7 @@ Sequence classification model.
 import functools
 import time
 from attention import attention
-from nn_layer import nn_layer, variable_summaries
+from nn_layer import nn_layer, variable_summaries, column_loss
 import tensorflow as tf
 
 import config
@@ -91,33 +91,32 @@ class SeqClassifier(object):
         states = tf.concat(values=states, axis=1)
         with tf.name_scope('Attention'):
             attention_output, self.alphas = attention(outputs, config.ATTENTION_SIZE, return_alphas=config.RETURN_ALPHA)
-            drop = tf.nn.dropout(attention_output, config.KEEP_PROB)
+            if self.mode == 'train':
+                attention_output = tf.nn.dropout(attention_output, config.KEEP_PROB)
 
-        layer_1 = nn_layer(drop, 2 * config.HIDDEN_LAYER_SIZE, config.HIDDEN_LAYER_SIZE // 2, 'layer_1', act=tf.nn.relu)
+
+        layer_1 = nn_layer(attention_output, 2 * config.HIDDEN_LAYER_SIZE, config.HIDDEN_LAYER_SIZE // 2, 'layer_1', act=tf.nn.relu)
         self.output = nn_layer(layer_1, config.HIDDEN_LAYER_SIZE // 2, config.NUM_CLASSES, 'output')
         self.predictions = tf.nn.sigmoid(self.output)
-        # self.output = tf.squeeze(output)
         
 
 
     @lazy_property
     def _create_loss(self):
-    
-    # softmax = tf.nn.softmax_cross_entropy_with_logits(logits=self.output,
-    #                                                   labels=self._target, dim=0)
 
         with tf.name_scope('loss'):
             softmax = tf.nn.sigmoid_cross_entropy_with_logits(logits=self.output,
                                                         labels=self._target)
+            # auc_score = tf.metrics.auc()
             self.losses = tf.reduce_mean(softmax)
         tf.summary.scalar('losses', self.losses)
 
 
-
     @lazy_property
     def _accuracy(self):
-        correct_prediction = tf.equal(tf.argmax(self._target, 1), tf.argmax(self.predictions, 1))
-        self.accuracy = (tf.reduce_mean(tf.cast(correct_prediction, tf.float32))) * 100 
+        self.accuracy = column_loss(label=self._target,
+                                    pred=self.predictions, 
+                                    func=tf.metrics.auc)
 
 
     @lazy_property
@@ -144,7 +143,7 @@ class SeqClassifier(object):
         self._create_embedding
         self._inference
         self._create_loss
-        # self._accuracy
+        self._accuracy
         self._create_optimizer
 
 
