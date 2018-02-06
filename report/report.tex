@@ -295,6 +295,17 @@ showstringspaces=false            %
         \label{fig:tensorflow}
     \end{figure}
 
+
+    \subsubsection{Multi-Tasak Learning}
+        In order to prevent over-fitting to training set and auxiliary loss was added to the computational graph. \cite{caruana1998multitask} showed that multi-task learning improves generalization by leveraging the domain-specific information contained in the training signal of related task. Here, the auxiliary task used is the log-loss error for predicting if any form of comment toxicity is observed. Since large number of comments didn't classified as toxic comment, this auxiliary task help better discriminating toxic comments. The scheme used here is Hard Parameter Sharing \cite{caruanamultitask}, which the parameters are shared between all task while keeping several task-specific output layers (Figure \ref{fig:mtl}).
+
+        \begin{figure}
+            \centering
+            \includegraphics[scale=0.4]{mtl.png}
+            \caption{Multi-task learnng with Hard Parameter Sharing.}
+            \label{fig:mtl}
+        \end{figure}
+
     \subsubsection{Other Measures}
 
     In addition to the attention layer other measures such as dropout layers, exponential learning rate decay were used to reduce the log-loss and improve the model generalization. 
@@ -322,18 +333,33 @@ showstringspaces=false            %
 
 
     \subsection{Justification}
+    
+    Using the RNN based text classification with attention mechanism and the lowest log-loss error achieved is 0.0342 which shows a $38.56\%$ reduction compared to log-loss error obtained using the benchmark model. The reduction in error is significant and justifies the computational cost of training a deep architecture.
+
 
 \section{Conclusion}
 
 
     \subsection{Free-Form Visualization}
 
+    In order to visual the significance of solution used for this specific problem, attention layer weights and the increase importance of words in the input with higher attention weights is provided in Figure \ref{fig:att_image}. It can be seen that model learned to pay more attention to words that contain profanities.
+    
+    \begin{figure}
+        \centering
+        \includegraphics[width=7in, height=1in]{att_image.png}
+        \caption{Attention layer Visualization}
+        \label{fig:att_image}
+    \end{figure}    
+
+
 
     \subsection{Reflection}
 
+    In this project a deep recurrent neural network was trained to predict if the input text includes multiple profanity or contains content that and can negatively effect the online community. Since the text in the comments include many non-standard form form of speech or incorrect spellings, significant effort was required for preprocessing the text. Since in most cases, the observed comments were long, a recurrent neural neural network with attention mechanics was implemented that is immune to common problem in these situation such as vanishing gradient, exploding gradient and etc. The proposed model was compared to a logistic1 regression model based on tf-idf data which shows significant reduction in log-loss error and justifies the additional computational cost.
+
+
     \subsection{Improvement}
-
-
+    This project can use improvements in many respects, First, larger model with many additional hidden layers can improve the generalization and result in better prediction. Also, more training data can certainly improve the results. Other measures such as pre-training on similar data set can alo improve the generalization. In addition, like many Kaggle competition the best results are based on ensemble of many models and is possible solution to improve the predictions.
 
 
 \bibliographystyle{plainnat}

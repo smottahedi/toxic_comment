@@ -202,6 +202,12 @@ INPUT ./figures/attention.png
 INPUT figures/tensorflow.png
 INPUT ./figures/tensorflow.png
 INPUT ./figures/tensorflow.png
+INPUT figures/mtl.png
+INPUT ./figures/mtl.png
+INPUT ./figures/mtl.png
+INPUT figures/att_image.png
+INPUT ./figures/att_image.png
+INPUT ./figures/att_image.png
 INPUT report.bbl
 INPUT report.bbl
 INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/cm/cmti10.tfm

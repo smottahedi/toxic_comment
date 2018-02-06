@@ -1,15 +1,15 @@
 # Fdb version 3
-["bibtex report"] 1517425569 "report.aux" "report.bbl" "report" 1517426536
+["bibtex report"] 1517869816 "report.aux" "report.bbl" "report" 1517877324
   "/usr/share/texlive/texmf-dist/bibtex/bst/natbib/plainnat.bst" 1233624470 26816 ffe5423d2019860bad9f54bc402fac15 ""
-  "bibliography.bib" 1517419116 410 80bdb2dd97d0520019995d77247c1408 ""
-  "report.aux" 1517426536 4484 170b367ccef1031f13ab932a06e0311c ""
+  "bibliography.bib" 1517860457 858 163e8c8cf2cc4e5070f332eed9a950f7 ""
+  "report.aux" 1517877324 5237 c05c1e8ec5387a5179a2c99aa00430b1 ""
   "report.bcf" 0 -1 0 ""
   (generated)
-  "report.blg"
   "report.bbl"
-["pdflatex"] 1517426535 "/home/mfc/Projects/toxic_comment/report/report.tex" "report.pdf" "report" 1517426536
+  "report.blg"
+["pdflatex"] 1517877324 "/home/mfc/Projects/toxic_comment/report/report.tex" "report.pdf" "report" 1517877324
   "/etc/texmf/web2c/texmf.cnf" 1494623325 1101 af7716885e081ab43982cab7b4672c1a ""
-  "/home/mfc/Projects/toxic_comment/report/report.tex" 1517426535 14570 161289d9d5e546f0317f262e15cc0d0f ""
+  "/home/mfc/Projects/toxic_comment/report/report.tex" 1517877324 17671 fe52ad73687c75b46fc0da0134c912fa ""
   "/usr/share/texlive/texmf-dist/fonts/map/fontname/texfonts.map" 1272929888 3287 e6b82fe08f5336d4d5ebc73fb1152e87 ""
   "/usr/share/texlive/texmf-dist/fonts/tfm/public/amsfonts/cmextra/cmbsy5.tfm" 1246382020 1120 1e8878807317373affa7f7bba4cf2f6a ""
   "/usr/share/texlive/texmf-dist/fonts/tfm/public/amsfonts/cmextra/cmbsy6.tfm" 1246382020 1124 14ccf5552bc7f77ca02a8a402bea8bfb ""
@@ -125,17 +125,19 @@
   "/usr/share/texmf/web2c/texmf.cnf" 1503343927 31343 93828589fb0cea665e553ee5a17ad2d4 ""
   "/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map" 1503418287 1863403 f3ff9a4253bcb5fb9a9baaf0c572cb01 ""
   "/var/lib/texmf/web2c/pdftex/pdflatex.fmt" 1503418300 3854401 52c3308e6344815dd63fad70c9573904 ""
+  "figures/att_image.png" 1517869579 30255 75b5a5ead2dd745cda5a5ee24ee93741 ""
   "figures/attention.png" 1517420151 22011 ddfe223b720942394d0b8890ba07f856 ""
   "figures/bi_rnn.png" 1517418266 39996 06d1df64d005922feba506429c15c2ef ""
   "figures/labels.pdf" 1516858096 14008 82c9a90d5a379fd90c81e9545d11f20b ""
+  "figures/mtl.png" 1517860558 29036 311e873a36158b38e79ec52d98276c86 ""
   "figures/tensorflow.png" 1517421013 190652 8f364e011abae4a5a9d226410de0c979 ""
   "figures/wordcloud.pdf" 1516862377 82193 040724a2cb3803ef15ebd404cb8437c0 ""
-  "report.aux" 1517426536 4484 170b367ccef1031f13ab932a06e0311c ""
-  "report.bbl" 1517425569 706 3a0cefcf96fde207843deb621d28b046 "bibtex report"
-  "report.out" 1517426536 1449 18df1dd175d0d26ad9c0e6e44b485bda ""
-  "report.tex" 1517426535 14570 161289d9d5e546f0317f262e15cc0d0f ""
+  "report.aux" 1517877324 5237 c05c1e8ec5387a5179a2c99aa00430b1 ""
+  "report.bbl" 1517869816 1109 1d24ecd46c1bd120446fb6379dfcf5ff "bibtex report"
+  "report.out" 1517877324 1528 d8294ec61af9e2bc3f010befa27a80f2 ""
+  "report.tex" 1517877324 17671 fe52ad73687c75b46fc0da0134c912fa ""
   (generated)
-  "report.aux"
   "report.out"
+  "report.aux"
   "report.pdf"
   "report.log"

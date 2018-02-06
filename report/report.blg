@@ -3,44 +3,47 @@ Capacity: max_strings=35307, hash_size=35307, hash_prime=30011
 The top-level auxiliary file: report.aux
 The style file: plainnat.bst
 Database file #1: bibliography.bib.bib
-You've used 1 entry,
+Warning--empty year in caruanamultitask
+Warning--empty year in caruanamultitask
+You've used 3 entries,
             2773 wiz_defined-function locations,
-            598 strings with 5168 characters,
-and the built_in function-call counts, 843 in all, are:
-= -- 72
-> -- 57
-< -- 1
-+ -- 19
-- -- 18
-* -- 68
-:= -- 123
-add.period$ -- 3
-call.type$ -- 1
-change.case$ -- 9
-chr.to.int$ -- 1
-cite$ -- 2
-duplicate$ -- 35
-empty$ -- 58
-format.name$ -- 19
-if$ -- 179
+            611 strings with 5427 characters,
+and the built_in function-call counts, 1823 in all, are:
+= -- 172
+> -- 77
+< -- 5
++ -- 27
+- -- 24
+* -- 124
+:= -- 254
+add.period$ -- 11
+call.type$ -- 3
+change.case$ -- 17
+chr.to.int$ -- 3
+cite$ -- 8
+duplicate$ -- 96
+empty$ -- 159
+format.name$ -- 27
+if$ -- 408
 int.to.chr$ -- 1
 int.to.str$ -- 1
-missing$ -- 1
-newline$ -- 13
-num.names$ -- 4
-pop$ -- 21
+missing$ -- 3
+newline$ -- 23
+num.names$ -- 12
+pop$ -- 49
 preamble$ -- 1
-purify$ -- 8
+purify$ -- 14
 quote$ -- 0
-skip$ -- 35
+skip$ -- 74
 stack$ -- 0
-substring$ -- 42
-swap$ -- 13
-text.length$ -- 1
+substring$ -- 97
+swap$ -- 30
+text.length$ -- 3
 text.prefix$ -- 0
 top$ -- 0
-type$ -- 11
-warning$ -- 0
-while$ -- 6
+type$ -- 33
+warning$ -- 2
+while$ -- 18
 width$ -- 0
-write$ -- 20
+write$ -- 47
+(There were 2 warnings)
