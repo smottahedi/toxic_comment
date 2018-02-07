@@ -88,7 +88,7 @@ showstringspaces=false            %
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\title{Machine Learning Nanodegree \\ Capstone Proposal}
+\title{Machine Learning Nanodegree \\ Toxic Comment Text Classification Challenge}
 \author{Sam Mottahedi}
 \date{01/08/2018}
 \begin{document}
@@ -109,8 +109,8 @@ showstringspaces=false            %
     facilitate conversations, leading many communities to limit or
     completely shut down user comments.
 
+    In this \href{https://www.kaggle.com/c/jigsaw-toxic-comment-classification-challenge}{Kaggle competition} ,  participant are challenged to build a multi-headed model that’s capable of detecting different types of of toxicity like threats, obscenity,insults, and identity-based hate.In order to accomplish this objective, a Recurrent Neural Network (RNN) Architecture with Gated Recurrent Units (GRU) were used which are suitable for processing information in the form of sequence of words. An Attention Mechanism is used in order to improve the performance of the model by focusing on important parts of input sequence. Multi-Task learning objective is added to network to improve the generalization error and reduce over-fitting to the training data set.
 
-    In this \href{https://www.kaggle.com/c/jigsaw-toxic-comment-classification-challenge}{Kaggle competition} ,  participant are challenged to build a multi-headed model that’s capable of detecting different types of of toxicity like threats, obscenity,insults, and identity-based hate.
 
 
     \subsection{Metrics}
@@ -133,7 +133,7 @@ showstringspaces=false            %
     The \href{https://www.kaggle.com/c/jigsaw-toxic-comment-classification-challenge/data}{Kaggle competition dataset} provided is Wikipedia Human Annotations of Toxicity on Talk Pages and contains $160,000$ human labelled annotations based on asking 5000 crowd-workers to rate Wikipedia comments according to their toxicity (likely to make others leave the conversation). Each comment was rated by 10 crowd-workers. The Test dataset which is used to evaluating performance in competition consist of $226,998$ unlabeled comments. Each comment in the training set can be labeled with $6$ labels which are not mutually exclusive.
 
     The toxic comment data set have the following fields:
-    
+
     \begin{itemize}
         \item "id": (string)
         \item "comment texts": comments (string)
@@ -159,7 +159,7 @@ showstringspaces=false            %
 
     \subsection{Exploratory Visualization}
 
-    It is important to know how labeled comment are distributed in the dataset and wether or not they the labels as balanced. Figure \ref{fig:labels} shows the distribution of labels 
+    It is important to know how labeled comment are distributed in the dataset and wether or not they the labels as balanced. Figure \ref{fig:labels} shows the distribution of labels
 
     \begin{figure}[!h]
         \centering
@@ -169,7 +169,7 @@ showstringspaces=false            %
     \end{figure}
 
     The plot shows that most of the comments are innocent and small number of comments are classified as any form toxic comment. The comments classified as severely toxic, threat and identity hate are rare compared to toxic, obscene and insult.
-    
+
     An example of a comment is provided bellow with was labeled as both toxic and a threat.
 
     \begin{verbatim}
@@ -195,7 +195,7 @@ showstringspaces=false            %
     Recurrent neural network architectures combining with attention mechanism,
     or neural attention model, have shown promising performance recently for
     the tasks including speech recognition, image caption generation,
-    visual question answering and machine translation. 
+    visual question answering and machine translation.
     In the sequence labeling tasks,
     the model input is a sequence, and the output is the label of the
     input sequence. The major difficulty of sequence labeling is that when
@@ -206,6 +206,7 @@ showstringspaces=false            %
     it is capable of highlighting important part among the entire sequence for
     the classification task.
 
+    Recurrent neural networks (RNNs) are class of neural networks designed for processing sequential data [\cite{goodfellow2016deep}]. Compared to feed forward neural networks, RNNs are able to scale to longer sequences which in most part is not practical without sequence-based networks. Generally, RNN are implemented by unrolling the computational graph and sharing wmodel parameters across deep network structure. RNNs are trained using Back-Propagation Through Time (BPTT) which is variation of ordinary back-propagation applied to an unrolled computational graph. Deep RNNs usually face complication due to Long-Term dependencies [\cite{goodfellow2016deep}] such as vanishing and exploding gradients. Most effective solution to overcome these problem is the use of Gated Recurrent Units (GRUs) which is based on idea of creating pathways through time that have derivatives that neither vanish nor explode. GRUs accomplish this by introducing self loops to add pathways were gradient can flow for long duration.
 
 
     In this project, each comment is treated as set of features using pre-trained GloVe word embedding. A Bi-directional recurrent neural network with Gated Recurrent Units (GRU). Attention mechanism is added on top of the Bi-directional RNN which improve the performance of the model focusing on important parts of long sequence and reduce the effect of noise and unrelated information. The classification task is a multi-label classification where comments toxicity labels are not mutually exclusive.
@@ -256,27 +257,99 @@ showstringspaces=false            %
 
     \subsubsection{Text Classification with Recurrent Neural Networks}
 
-    The architecure used in this work is Recurrent Neural Network (RRN) that takes the sequence of words index and an encode the information in the text in the last output layer. The last output layer of the RNN is passed through two feed forward layers and a final $1 \times 6$ layer where a element wise sigmoid function is applied and a multi-label predictions are generated. Since some of the comments are quite long, a Bi-directional RNN is used which has two Gated Recurrent Cells (GRU) for forward and backward processing of the input sequence and outputs the concatenated output oof the forward and backward cell [figure \ref{figure:bi-rnn}].
-    
-    \begin{figure}
+    The architecure used in this work is Recurrent Neural Network (RRN) that takes the sequence of words index and an encode the information in the text in the last output layer. First we need to lookup word-vectors corresponding to each word in the input sequence. The embedding matrix and the embedding lookup operation defined using TensorFlow as:
+
+    \begin{python}
+    @lazy_property
+    def _create_embedding(self):
+        with tf.name_scope('Embeddings'):
+            if self.pre_train:
+                self.embedding = tf.Variable(tf.constant(0.0,
+                                                        shape=[config.VOCAB_SIZE,
+                                                        config.GLOVE_SIZE]),
+                                                        trainable=config.TRAINABLE_EMBEDDING)
+                self.embedding_init = self.embedding.assign(self._embedding_placeholder)
+
+            else:
+                self.embedding = tf.Variable(tf.random_uniform(
+                    [config.VOCAB_SIZE, config.EMBEDDING_DIMENSION], -1.0, 1.0))
+    embed = tf.nn.embedding_lookup(self.embedding, self._inputs)
+    \end{python}
+
+    Since some of the comments are quite long, a Bi-directional RNN is used which has two Gated Recurrent Cells (GRU) for forward and backward processing of the input sequence and outputs the concatenated output oof the forward and backward cell [figure \ref{figure:bi-rnn}].     The GRU forward and backward cell are and the bi-directional dynamic RNN are defined in the \pythoninline{_inference} method of \pythoninline{SeqClassifier} class:
+
+    \begin{figure}[H]
         \centering
         \includegraphics[scale=0.6]{bi_rnn.png}
-        \caption{Bi-directional RNNS}
+        \caption{Bi-directional RNNs}
         \label{figure:bi-rnn}
     \end{figure}
-    
+
+
+
+    \begin{python}
+    with tf.name_scope('Bi-GRU'):
+    with tf.variable_scope('forward'):
+        gru_fw_cell = tf.contrib.rnn.GRUCell(
+            config.HIDDEN_LAYER_SIZE)
+        if self.mode == 'train':
+            gru_fw_cell = tf.contrib.rnn.DropoutWrapper(gru_fw_cell,
+            output_keep_prob=config.KEEP_PROB )
+
+    with tf.variable_scope('backward'):
+        gru_bw_cell = tf.contrib.rnn.GRUCell(
+            config.HIDDEN_LAYER_SIZE)
+        if self.mode == 'train':
+            gru_bw_cell = tf.contrib.rnn.DropoutWrapper(gru_bw_cell,
+            output_keep_prob=config.KEEP_PROB)
+
+        outputs, states = tf.nn.bidirectional_dynamic_rnn(cell_fw=gru_fw_cell,
+                                                    cell_bw=gru_bw_cell,
+                                                    inputs=embed,
+                                                    sequence_length=self._seq_length,
+                                                    dtype=tf.float32,
+                                                    scope='Bi-GRU')
+    states = tf.concat(values=states, axis=1)
+    \end{python}
+
+    It is important to note that the Dropout should only apply at the time of training. The last output layer of the RNN is concatenated and passed through two feed forward layers and a final layer with $6$ output nodes where a element wise sigmoid function is applied and a multi-label predictions are generated.
+
+    The optimizer used here is Stochastic Gradient Decent with exponentially decaying learning rate defined as:
+
+    \begin{python}
+    def _create_optimizer(self):
+    with tf.variable_scope('training') as scope:
+        self.global_step = tf.Variable(0, dtype=tf.int32, trainable=False,
+                                        name='global_step')
+
+        if self.mode == 'train':
+            with tf.name_scope('learning_rate'):
+                self.learning_rate = tf.train.exponential_decay(config.LR, self.global_step,
+                                        10000, 0.96, staircase=True)
+                tf.summary.scalar('learning_rate', self.learning_rate)
+            self.optimizer = tf.train.GradientDescentOptimizer(self.learning_rate)
+            trainbales = tf.trainable_variables()
+            start = time.time()
+            clipped_grads, self.gradient_norms = tf.clip_by_global_norm(tf.gradients(self.losses,
+            trainbales), config.MAX_GRAD_NORM)
+            self.train_ops = self.optimizer.apply_gradients(zip(clipped_grads, trainbales),
+            global_step=self.global_step)
+            print('creating opt took {} seconds'.format(time.time() - start)
+    \end{python}
+
+    It can be seen that the gradient are manually applied and the gradient norm is clipped at $1$ to prevent problems due to exploding gradients.
 
     \subsection{Refinement}
 
     \subsubsection{Attention Mechanism}
     Since not all words contribute equally to the representation of the sequence meaning we need to use an attention mechanism [\cite{yang2016hierarchical}] that extract important words to the meaning of the sequence and aggregates the presentation of informative words to form a sentence vector from [figure \ref{fig:attention}
-    
+
     \begin{align}
         u_{it} = tanh(W_w h_{it} + b_w) \\
         \alpha_{it} = \frac{exp(u_{it}^T u_w)}{\sum_t exp(u_{it}^T u_w)} \\
-        o = \sum_t \alpha_{it}h_{it} 
+        o = \sum_t \alpha_{it}h_{it}
     \end{align}
-    
+
     where the word annotation $h_{it}$ is passed to a one-layer MLP to get $u_it$ as hidden representation $h_it$  the importance of the word is measured by comparing $u_{it}$ to a word context vector $u_w$ and then passed through a softmax function to get normalized importance weight $\alpha_{it}$ and the output vector is weighted sum of word annotation based of the weights. The context vector is randomly initialized and jointly learned during the training process.
 
     \begin{figure}
@@ -308,7 +381,7 @@ showstringspaces=false            %
 
     \subsubsection{Other Measures}
 
-    In addition to the attention layer other measures such as dropout layers, exponential learning rate decay were used to reduce the log-loss and improve the model generalization. 
+    In addition to the attention layer other measures such as dropout layers, exponential learning rate decay were used to reduce the log-loss and improve the model generalization.
 
 
 \section{Results}
@@ -333,7 +406,7 @@ showstringspaces=false            %
 
 
     \subsection{Justification}
-    
+
     Using the RNN based text classification with attention mechanism and the lowest log-loss error achieved is 0.0342 which shows a $38.56\%$ reduction compared to log-loss error obtained using the benchmark model. The reduction in error is significant and justifies the computational cost of training a deep architecture.
 
 
@@ -343,13 +416,13 @@ showstringspaces=false            %
     \subsection{Free-Form Visualization}
 
     In order to visual the significance of solution used for this specific problem, attention layer weights and the increase importance of words in the input with higher attention weights is provided in Figure \ref{fig:att_image}. It can be seen that model learned to pay more attention to words that contain profanities.
-    
+
     \begin{figure}
         \centering
         \includegraphics[width=7in, height=1in]{att_image.png}
         \caption{Attention layer Visualization}
         \label{fig:att_image}
-    \end{figure}    
+    \end{figure}
 
 
 
@@ -364,5 +437,5 @@ showstringspaces=false            %
 
 \bibliographystyle{plainnat}
 \bibliography{bibliography.bib}
-    
+
 \end{document}

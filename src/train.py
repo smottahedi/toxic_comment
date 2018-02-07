@@ -142,7 +142,7 @@ def train():
         total_loss = 0 
         total_accuracy = 0
         early_stopping = EarlyStopping(0.0, np.inf)
-        best_loss = np.inf
+        best_loss = 0
 
         for _ in range(config.EPOCHS):
             skip_step = _get_skip_step(iteration)
@@ -169,8 +169,8 @@ def train():
             if early_stopping.update(step_loss):
                 print('early stopping')
                 break
-            if val_loss < best_loss:
-                best_loss = val_loss
+            if accuracy > best_loss:
+                best_loss = accuracy
                 saver.save(sess, os.path.join(config.CPT_PATH, 'SeqClassifier'), global_step=model.global_step)
             
             if config.RETURN_ALPHA:
@@ -216,7 +216,7 @@ def predict():
     df = pd.DataFrame(outputs, columns=list_classes)
     df.insert(0, 'id', ids)
     num_submission = len(os.listdir(os.path.join(config.DATA_PATH, 'submissions')))
-    df.to_csv(os.path.join(config.DATA_PATH, 'submit' + str(num_submission) + '.csv'), index=False)
+    df.to_csv(os.path.join(config.DATA_PATH, 'submissions',  'submit_' + str(num_submission) + '.csv'), index=False)
 
 
 

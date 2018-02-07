@@ -1,7 +1,7 @@
 from nltk.tokenize import word_tokenize
 from nltk.tokenize import RegexpTokenizer
 from nltk.corpus import stopwords
-from nltk.stem import PorterStemmer 
+from nltk.stem import PorterStemmer
 from nltk.stem.wordnet import WordNetLemmatizer
 
 import time
@@ -12,10 +12,10 @@ import os
 import string
 import config
 import random
-from urllib.request import urlretrieve 
+from urllib.request import urlretrieve
 import numpy as np
 from tqdm import tqdm
-import gc 
+import gc
 import pickle
 
 
@@ -27,7 +27,7 @@ import multiprocessing
 import itertools
 
 
-replace_numbers = re.compile(r'\d+',re.IGNORECASE)
+replace_numbers = re.compile(r'\d+', re.IGNORECASE)
 porter_stemmer = PorterStemmer()
 wordnet_lemmatizer = WordNetLemmatizer()
 tokenize = RegexpTokenizer(r'\w+')
@@ -36,13 +36,17 @@ alpha_numeric = re.compile('[\W_]+')
 with open(os.path.join(config.DATA_PATH, 'bad_words_en.txt'), 'r') as f:
     bad_words = f.read().split('\n')[:-1]
 
+
 def substitute_repeats_fixed_len(text, num_chars, num_times=3):
-    return re.sub(r"(\S{{{}}})(\1{{{},}})".format(num_chars, num_times-1), r"\1", text)
+    return re.sub(r"(\S{{{}}})(\1{{{},}})".format(num_chars,
+                                                  num_times-1), r"\1", text)
+
 
 def substitute_repeats(text, num_times=3):
     for num_chars in range(1, 20):
         text = substitute_repeats_fixed_len(text, num_chars, num_times)
     return text
+
 
 def split_text_and_digits(text, regexps=None):
     if not regexps:
@@ -54,6 +58,7 @@ def split_text_and_digits(text, regexps=None):
             return ' '.join(result.groups())
     return text
 
+
 def is_bad(token):
     token = token.lower()
     bads = set()
@@ -64,11 +69,12 @@ def is_bad(token):
             else:
                 bads.add(token)
                 bads.add(word)
-    
+
     if bads:
         return ' '.join(bads)
     else:
         return token
+
 
 def download_data():
     train_url = 'https://www.kaggle.com/c/jigsaw-toxic-comment-classification-challenge/download/train.csv.zip'
@@ -102,14 +108,14 @@ def make_dir(path):
 def get_glove(path_to_glove, vocab_path):
     vocab = load_vocab(vocab_path)
     embedding_weights = {}
-    count_all_words = 0 
+    count_all_words = 0
     embed = []
     with ZipFile(path_to_glove) as z:
         with z.open("glove.6B.100d.txt") as f:
             print('get glove word vector!')
             for line in tqdm(f):
                 vals = line.split()
-                word = str(vals[0].decode("utf-8")) 
+                word = str(vals[0].decode("utf-8"))
                 if word in vocab.itervalues():
                     count_all_words+=1
                     coefs = np.asarray(vals[1:], dtype='float32')
@@ -151,13 +157,13 @@ def my_preprocess(sentence, stopword=1, stem=0, lemma=1):
     sentence = [split_text_and_digits(token) for token in sentence]
     sentence = [substitute_repeats(token, 3) for token in sentence]
     sentence = [is_bad(token) for token in sentence]
-    
+
     sentence = [word for word in sentence if len(word) > 1]
     if stopword:
         sentence = [word for word in sentence if not word in stopwords.words('english')]
     if stem:
         sentence = [porter_stemmer.stem(word) for word in sentence]
-    if lemma: 
+    if lemma:
         sentence = [wordnet_lemmatizer.lemmatize(word) for word in sentence]
 
     return ' '.join(sentence)
@@ -169,23 +175,23 @@ def tokenizer(sentences):
     for comment in sentences:
         comment = my_preprocess(comment)
         txt = preprocess.normalize_whitespace(comment)
-        
-        txt = preprocess.preprocess_text(txt, 
-                                         fix_unicode=True, 
-                                         lowercase=True, 
-                                         transliterate=True, 
-                                         no_urls=True, 
+
+        txt = preprocess.preprocess_text(txt,
+                                         fix_unicode=True,
+                                         lowercase=True,
+                                         transliterate=True,
+                                         no_urls=True,
                                          no_emails=True,
                                          no_phone_numbers=True,
                                          no_numbers=True,
-                                         no_currency_symbols=True, 
+                                         no_currency_symbols=True,
                                          no_punct=True,
                                          no_contractions=True,
                                          no_accents=True)
 
         y.append(u''.join(txt))
     return y
-        
+
 def build_vocab():
     start = time.time()
     test_path = os.path.join(config.DATA_PATH, 'test.csv')
@@ -193,7 +199,7 @@ def build_vocab():
     normalized_text_path = os.path.join(config.PROCESSED_PATH, 'normalized_comments.txt')
     bigram_path = os.path.join(config.PROCESSED_PATH, 'bigram')
     bigram_comments_path = os.path.join(config.PROCESSED_PATH, 'bigram_commnets.txt')
-    
+
     if config.PROCESSED_PATH not in os.listdir(config.DATA_PATH):
         try:
             os.mkdir(config.PROCESSED_PATH)
@@ -201,7 +207,7 @@ def build_vocab():
             pass
 
     vocab = {}
-    
+
     train_df = read_file(train_path)
     test_df = read_file(test_path)
     print('tokenizing vocab file')
@@ -219,7 +225,7 @@ def build_vocab():
     bigram.save(bigram_path)
     phraser = Phraser(bigram)
 
-    with open(bigram_comments_path, 'w', encoding='utf_8') as f: 
+    with open(bigram_comments_path, 'w', encoding='utf_8') as f:
        for comment in lines:
             comm = u' '.join(phraser[comment])
             f.write(comm + '\n')
@@ -231,15 +237,15 @@ def build_vocab():
     bigram_dict.add_documents([['<pad>']])
 
     with open(os.path.join(config.ROOT, 'src', 'config.py'), 'a') as f:
-        f.write('VOCAB_SIZE = {}'.format(len(bigram_dict)))    
+        f.write('VOCAB_SIZE = {}'.format(len(bigram_dict)))
 
-    print('time passed: {} minutes'.format((time.time() - start) / 60))   
+    print('time passed: {} minutes'.format((time.time() - start) / 60))
 
 
 def load_vocab(vocab_path):
     dict = Dictionary.load_from_text(vocab_path)
     return dict
-    
+
 
 def sentence2id(vocab, tokens):
     return vocab.doc2idx(tokens)
@@ -253,14 +259,14 @@ def token2id(filename, out_path):
     in_file = os.path.join(config.DATA_PATH, filename)
     df = read_file(in_file)
     out_file = open(os.path.join(config.PROCESSED_PATH, out_path), 'w')
-    
+
     lines = df.comment_text.fillna('N/A').values
     print('token to ids')
     for line in tqdm(lines):
         line = tokenizer(line)[0].split()
         ids = sentence2id(vocab, line)
         out_file.write(' '.join(str(id_) for id_ in ids) + '\n')
-        
+
 def grouper_it(iterable, n):
     it = iter(iterable)
     while True:
@@ -293,21 +299,21 @@ def load_data(text_id_filename, target_file_name, mode='train'):
         for line in tqdm(lines):
             ids = [int(id_) for id_ in line.split()]
             data.append(ids)
-    
+
     if mode == 'train':
         in_file = os.path.join(config.DATA_PATH, target_file_name)
         df = read_file(in_file)
         targets = df.iloc[:, 2:].values
 
         train_input, train_target, test_input, test_target = train_test_split(data, targets, config.TRAIN_TEST_RATIO)
-    
+
         return train_input, train_target, test_input, test_target
-    
+
     if mode == 'test':
         in_file = os.path.join(config.DATA_PATH, target_file_name)
         df = read_file(in_file)
         ids = df.iloc[:, 0]
-        return data, ids 
+        return data, ids
 
 
 def _reshape_batch(inputs, size, batch_size):

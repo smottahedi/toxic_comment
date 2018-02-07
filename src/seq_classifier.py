@@ -71,19 +71,19 @@ class SeqClassifier(object):
 
         with tf.name_scope('Bi-GRU'):
             with tf.variable_scope('forward'):
-                lstm_fw_cell = tf.contrib.rnn.GRUCell(
+                gru_fw_cell = tf.contrib.rnn.GRUCell(
                     config.HIDDEN_LAYER_SIZE)
                 if self.mode == 'train':
-                    lstm_fw_cell = tf.contrib.rnn.DropoutWrapper(lstm_fw_cell, output_keep_prob=config.KEEP_PROB + 0.2)
+                    gru_fw_cell = tf.contrib.rnn.DropoutWrapper(gru_fw_cell, output_keep_prob=config.KEEP_PROB )
 
             with tf.variable_scope('backward'):
-                lstm_bw_cell = tf.contrib.rnn.GRUCell(
+                gru_bw_cell = tf.contrib.rnn.GRUCell(
                     config.HIDDEN_LAYER_SIZE)
                 if self.mode == 'train':
-                    lstm_bw_cell = tf.contrib.rnn.DropoutWrapper(lstm_bw_cell, output_keep_prob=config.KEEP_PROB + 0.2)
+                    gru_bw_cell = tf.contrib.rnn.DropoutWrapper(gru_bw_cell, output_keep_prob=config.KEEP_PROB)
 
-                outputs, states = tf.nn.bidirectional_dynamic_rnn(cell_fw=lstm_fw_cell,
-                                                            cell_bw=lstm_bw_cell,
+                outputs, states = tf.nn.bidirectional_dynamic_rnn(cell_fw=gru_fw_cell,
+                                                            cell_bw=gru_bw_cell,
                                                             inputs=embed,
                                                             sequence_length=self._seq_length,
                                                             dtype=tf.float32,
@@ -154,7 +154,7 @@ class SeqClassifier(object):
                     self.learning_rate = tf.train.exponential_decay(config.LR, self.global_step,
                                             10000, 0.96, staircase=True)
                     tf.summary.scalar('learning_rate', self.learning_rate)
-                self.optimizer = tf.train.AdamOptimizer(self.learning_rate)
+                self.optimizer = tf.train.GradientDescentOptimizer(self.learning_rate)
                 trainbales = tf.trainable_variables()
                 start = time.time()
                 clipped_grads, self.gradient_norms = tf.clip_by_global_norm(tf.gradients(self.losses, trainbales), config.MAX_GRAD_NORM)
