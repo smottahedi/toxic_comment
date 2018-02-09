@@ -1,15 +1,15 @@
 # Fdb version 3
-["bibtex report"] 1517970534 "report.aux" "report.bbl" "report" 1517981642
+["bibtex report"] 1517987818 "report.aux" "report.bbl" "report" 1517988144
   "/usr/share/texlive/texmf-dist/bibtex/bst/natbib/plainnat.bst" 1233624470 26816 ffe5423d2019860bad9f54bc402fac15 ""
   "bibliography.bib" 1517957238 1063 c7e9d18a648f3bf3c7e2b89729f63aeb ""
-  "report.aux" 1517981639 5410 951e75f3163cc49de429ad4ae0e7e788 ""
+  "report.aux" 1517988144 5298 b3c1de7cb03ad98f8fb69348122484d5 ""
   "report.bcf" 0 -1 0 ""
   (generated)
   "report.bbl"
   "report.blg"
-["pdflatex"] 1517981642 "/home/mfc/Projects/toxic_comment/report/report.tex" "report.pdf" "report" 1517981642
+["pdflatex"] 1517988143 "/home/mfc/Projects/toxic_comment/report/report.tex" "report.pdf" "report" 1517988144
   "/etc/texmf/web2c/texmf.cnf" 1494623325 1101 af7716885e081ab43982cab7b4672c1a ""
-  "/home/mfc/Projects/toxic_comment/report/report.tex" 1517981642 22860 c01c15c88c422683daaa6c766872f5c9 ""
+  "/home/mfc/Projects/toxic_comment/report/report.tex" 1517988144 23261 65cd8ee8f2ef2b4d7aa96dcdb0554e33 ""
   "/usr/share/texlive/texmf-dist/fonts/map/fontname/texfonts.map" 1272929888 3287 e6b82fe08f5336d4d5ebc73fb1152e87 ""
   "/usr/share/texlive/texmf-dist/fonts/tfm/public/amsfonts/cmextra/cmbsy5.tfm" 1246382020 1120 1e8878807317373affa7f7bba4cf2f6a ""
   "/usr/share/texlive/texmf-dist/fonts/tfm/public/amsfonts/cmextra/cmbsy6.tfm" 1246382020 1124 14ccf5552bc7f77ca02a8a402bea8bfb ""
@@ -135,12 +135,12 @@
   "figures/mtl.png" 1517879859 29036 311e873a36158b38e79ec52d98276c86 ""
   "figures/tensorflow.png" 1517421013 190652 8f364e011abae4a5a9d226410de0c979 ""
   "figures/wordcloud.pdf" 1516862377 82193 040724a2cb3803ef15ebd404cb8437c0 ""
-  "report.aux" 1517981639 5410 951e75f3163cc49de429ad4ae0e7e788 ""
-  "report.bbl" 1517970534 1353 df7c7a7d947f002965bc0d4bc46c7af0 "bibtex report"
-  "report.out" 1517981639 1528 d8294ec61af9e2bc3f010befa27a80f2 ""
-  "report.tex" 1517981642 22860 c01c15c88c422683daaa6c766872f5c9 ""
+  "report.aux" 1517988144 5298 b3c1de7cb03ad98f8fb69348122484d5 ""
+  "report.bbl" 1517987818 1353 df7c7a7d947f002965bc0d4bc46c7af0 "bibtex report"
+  "report.out" 1517988144 1454 cf3468efefc74a4f1c71901009abf6b2 ""
+  "report.tex" 1517988144 23261 65cd8ee8f2ef2b4d7aa96dcdb0554e33 ""
   (generated)
-  "report.out"
   "report.aux"
-  "report.log"
   "report.pdf"
+  "report.log"
+  "report.out"

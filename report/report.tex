@@ -63,9 +63,9 @@ framesep=10pt,
 framexleftmargin=10pt,
 backgroundcolor=\color{codebg},
 rulecolor=\color{codebg},
-aboveskip=15pt,
-belowskip=15pt,
-showstringspaces=false            %
+aboveskip=10pt,
+belowskip=10pt,
+showstringspaces=true            %
 }}
 
 
@@ -278,7 +278,7 @@ showstringspaces=false            %
 
     Since some of the comments are quite long, a Bi-directional RNN is used which has two Gated Recurrent Cells (GRU) for forward and backward processing of the input sequence and outputs the concatenated output oof the forward and backward cell [figure \ref{figure:bi-rnn}].     The GRU forward and backward cell are and the bi-directional dynamic RNN are defined in the \pythoninline{_inference} method of \pythoninline{SeqClassifier} class:
 
-    \begin{figure}[H]
+    \begin{figure}
         \centering
         \includegraphics[scale=0.6]{bi_rnn.png}
         \caption{Bi-directional RNNs}
@@ -314,6 +314,33 @@ showstringspaces=false            %
 
     It is important to note that the Dropout should only apply at the time of training. The last output layer of the RNN is concatenated and passed through two feed forward layers and a final layer with $6$ output nodes where a element wise sigmoid function is applied and a multi-label predictions are generated.
 
+
+    \subsubsection{Attention Mechanism}
+    Since not all words contribute equally to the representation of the sequence meaning we need to use an attention mechanism [\cite{yang2016hierarchical}] that extract important words to the meaning of the sequence and aggregates the presentation of informative words to form a sentence vector from [figure \ref{fig:attention}
+
+    \begin{align}
+        u_{it} = tanh(W_w h_{it} + b_w) \\
+        \alpha_{it} = \frac{exp(u_{it}^T u_w)}{\sum_t exp(u_{it}^T u_w)} \\
+        o = \sum_t \alpha_{it}h_{it}
+    \end{align}
+
+    where the word annotation $h_{it}$ is passed to a one-layer MLP to get $u_it$ as hidden representation $h_it$  the importance of the word is measured by comparing $u_{it}$ to a word context vector $u_w$ and then passed through a softmax function to get normalized importance weight $\alpha_{it}$ and the output vector is weighted sum of word annotation based of the weights. The context vector is randomly initialized and jointly learned during the training process.
+
+    \begin{figure}
+        \centering
+        \includegraphics[scale=0.7]{attention.png}
+        \caption{Attention Mechanism \cite{yang2016hierarchical}}
+        \label{fig:attention}
+    \end{figure}
+
+    \begin{figure}
+        \centering
+        \includegraphics[scale=0.3]{tensorflow.png}
+        \caption{TensorFlow computational graph for sequence classification model with attention mechanism}
+        \label{fig:tensorflow}
+    \end{figure}
+
+
     The optimizer used here is Stochastic Gradient Decent with exponentially decaying learning rate defined as:
 
     \begin{python}
@@ -337,39 +364,11 @@ showstringspaces=false            %
             print('creating opt took {} seconds'.format(time.time() - start)
     \end{python}
 
-    It can be seen that the gradient are manually applied and the gradient norm is clipped at $1$ to prevent problems due to exploding gradients.
+    It can be seen that the gradient are manually applied and the gradient norm is clipped at $1$ to prevent problems due to exploding gradients. The completed TensorFlow computational graph can be seen in Figure [\ref{fig:tensorflow}]
 
     \subsection{Refinement}
 
-    \subsubsection{Attention Mechanism}
-    Since not all words contribute equally to the representation of the sequence meaning we need to use an attention mechanism [\cite{yang2016hierarchical}] that extract important words to the meaning of the sequence and aggregates the presentation of informative words to form a sentence vector from [figure \ref{fig:attention}
-
-    \begin{align}
-        u_{it} = tanh(W_w h_{it} + b_w) \\
-        \alpha_{it} = \frac{exp(u_{it}^T u_w)}{\sum_t exp(u_{it}^T u_w)} \\
-        o = \sum_t \alpha_{it}h_{it}
-    \end{align}
-
-    where the word annotation $h_{it}$ is passed to a one-layer MLP to get $u_it$ as hidden representation $h_it$  the importance of the word is measured by comparing $u_{it}$ to a word context vector $u_w$ and then passed through a softmax function to get normalized importance weight $\alpha_{it}$ and the output vector is weighted sum of word annotation based of the weights. The context vector is randomly initialized and jointly learned during the training process.
-
-    \begin{figure}
-        \centering
-        \includegraphics[scale=0.7]{attention.png}
-        \caption{Attention Mechanism \cite{yang2016hierarchical}}
-        \label{fig:attention}
-    \end{figure}
-
-    The completed TensorFlow computational graph can be seen in Figure [\ref{fig:tensorflow}]
-
-    \begin{figure}
-        \centering
-        \includegraphics[scale=0.3]{tensorflow.png}
-        \caption{TensorFlow computational graph for sequence classification model with attention mechanism}
-        \label{fig:tensorflow}
-    \end{figure}
-
-
-    \subsubsection{Multi-Tasak Learning}
+    \subsubsection{Multi-Task Learning}
         In order to prevent over-fitting to training set and auxiliary loss was added to the computational graph. \cite{caruana1998multitask} showed that multi-task learning improves generalization by leveraging the domain-specific information contained in the training signal of related task. Here, the auxiliary task used is the log-loss error for predicting if any form of comment toxicity is observed. Since large number of comments didn't classified as toxic comment, this auxiliary task help better discriminating toxic comments. The scheme used here is Hard Parameter Sharing \cite{caruanamultitask}, which the parameters are shared between all task while keeping several task-specific output layers (Figure \ref{fig:mtl}).
 
         \begin{figure}
@@ -379,10 +378,7 @@ showstringspaces=false            %
             \label{fig:mtl}
         \end{figure}
 
-    \subsubsection{Other Measures}
-
-    In addition to the attention layer other measures such as dropout layers, exponential learning rate decay were used to reduce the log-loss and improve the model generalization.
-
+        Addition of multi-task layer resulted in $17\%$ reduction in validation log-loss value from $0.04123$ to $0.0342$.
 
 \section{Results}
 
@@ -402,7 +398,7 @@ showstringspaces=false            %
         \item Maximum input sequence length = 250
     \end{itemize}
 
-    An early-stopping mechanism is implemented to automatically save model weights corresponding to best evaluation log-loss and stop the training to prevent over-fitting to the training set.
+    An early-stopping mechanism is implemented to automatically save model weights corresponding to best evaluation log-loss and stop the training to prevent over-fitting to the training set. The best results obtained from a single model with attention mechanism and multi-task loss objective are 0.0281 log-loss on the training set and 0.0342 on the validation set. The best score obtained on the test dataset by submitting the prediction on Kaggle competition is 0.0362 log-loss. Recently the competition has change the metric form column-wise log-loss to column-wise Receiver Operator Characteristic Area Under the Curve (ROC AUC). The score obtained using the new evaluation metric is 0.9440.
 
 
     \subsection{Justification}
