@@ -1,6 +1,0 @@
-model_checkpoint_path: "/home/mfc/Projects/toxic_comment/data/checkpoints/SeqClassifier-3667"
-all_model_checkpoint_paths: "/home/mfc/Projects/toxic_comment/data/checkpoints/SeqClassifier-3654"
-all_model_checkpoint_paths: "/home/mfc/Projects/toxic_comment/data/checkpoints/SeqClassifier-3655"
-all_model_checkpoint_paths: "/home/mfc/Projects/toxic_comment/data/checkpoints/SeqClassifier-3656"
-all_model_checkpoint_paths: "/home/mfc/Projects/toxic_comment/data/checkpoints/SeqClassifier-3657"
-all_model_checkpoint_paths: "/home/mfc/Projects/toxic_comment/data/checkpoints/SeqClassifier-3667"

@@ -1,7 +1,7 @@
 import tensorflow as tf
 from seq_classifier import SeqClassifier
 import data
-import random 
+import random
 import time
 import os
 import argparse
@@ -40,11 +40,11 @@ def _check_restore_parameters(sess, saver):
 
 def run_step(sess, model, inputs, seq_length, mode, summary, targets=None):
     """ Run one step in training."""
-    
+
 
     # input feed: encoder inputs, decoder inputs, target_weights, as provided.
     input_feed = {}
-    
+
     input_feed[model._inputs.name] = inputs
     if mode == 'train' or mode == 'val':
         input_feed[model._target] = targets
@@ -78,7 +78,7 @@ def run_step(sess, model, inputs, seq_length, mode, summary, targets=None):
         return outputs  # No gradient norm, loss, accuracy, outputs.
     elif mode == 'val' and config.RETURN_ALPHA:
 
-        return outputs[0], None, outputs[1], 
+        return outputs[0], None, outputs[1],
     elif mode == 'val' and not config.RETURN_ALPHA:
         return outputs[0], outputs[1], None
 
@@ -116,12 +116,12 @@ def train():
 
     saver = tf.train.Saver()
     attention_vis = []
-    
+
     with tf.Session() as sess:
 
         print('running session')
         sess.run(tf.global_variables_initializer())
-        sess.run(tf.initialize_local_variables())
+        sess.run(tf.local_variables_initializer())
         _check_restore_parameters(sess, saver)
 
         merged = tf.summary.merge_all()
@@ -136,43 +136,54 @@ def train():
             else:
                 print('get Glove')
                 glove_embeddings = data.get_glove(config.GLOVE_PATH, config.VOCAB_PATH)
-            sess.run(model.embedding_init, feed_dict={model._embedding_placeholder:glove_embeddings})    
-        
+            sess.run(model.embedding_init, feed_dict={model._embedding_placeholder:glove_embeddings})
+
         iteration = model.global_step.eval()
-        total_loss = 0 
-        total_accuracy = 0
+        total_loss = 0
+        total_auc = 0
+        total_val_loss = 0
         early_stopping = EarlyStopping(0.0, np.inf)
         best_loss = 0
-
+        start = time.time()
         for _ in range(config.EPOCHS):
             skip_step = _get_skip_step(iteration)
             inputs, targets, seq_length = data.get_batch(train_input, train_target, batch_size=config.BATCH_SIZE)
-        
-            start = time.time()
+
+
             summary, step_grad_norm, step_loss, _ = run_step(sess, model, inputs, seq_length, 'train', merged, targets)
-            
+
             train_writer.add_summary(summary)
             total_loss += step_loss
             iteration += 1
-            
+
             inputs, targets, seq_length = data.get_batch(test_input, test_target, batch_size=config.BATCH_SIZE)
             val_loss, accuracy, alphas = run_step(sess, model, inputs, seq_length, mode='val', summary=None, targets=targets)
-            print('Iter {}:  loss: {}, validation loss: {} auc: {} grad_norm: {}, time {}'.format(iteration,
-                                                        step_loss,
-                                                        val_loss,
-                                                        accuracy,
-                                                        step_grad_norm,
-                                                        time.time() - start))
-            
-            start = time.time()
-            sys.stdout.flush()
-            if early_stopping.update(step_loss):
-                print('early stopping')
-                break
-            if accuracy > best_loss:
-                best_loss = accuracy
-                saver.save(sess, os.path.join(config.CPT_PATH, 'SeqClassifier'), global_step=model.global_step)
-            
+
+            total_auc += accuracy
+            total_val_loss += val_loss
+
+            if iteration % 50 == 0:
+                print('Iter {}:  loss: {}, validation loss: {} auc: {} grad_norm: {}, time {}'.format(iteration,
+                                                            total_loss / 50,
+                                                            total_val_loss / 50,
+                                                            total_auc / 50,
+                                                            step_grad_norm,
+                                                            time.time() - start))
+
+
+                start = time.time()
+                sys.stdout.flush()
+                if early_stopping.update(step_loss):
+                    print('early stopping')
+                    break
+                if total_auc / 50 > best_loss:
+                    best_loss = total_auc / 50
+                    saver.save(sess, os.path.join(config.CPT_PATH, 'SeqClassifier'), global_step=model.global_step)
+                total_auc = 0
+                total_val_loss = 0
+                total_loss = 0
+
+
             if config.RETURN_ALPHA:
                 attention_vis.append({str(a): b for a, b in zip(inputs[0], alphas[0])})
 
@@ -224,7 +235,7 @@ def main(args):
     if not os.path.isdir(config.PROCESSED_PATH):
         data.process_data()
     print('Data is ready!')
-    
+
     data.make_dir(config.CPT_PATH)
 
     mode = args[-1]

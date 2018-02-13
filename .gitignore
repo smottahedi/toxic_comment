@@ -11,3 +11,4 @@ data/checkpoints/*.*
 *.data-*
 *.mfc-XPS
 /data/processed/bigram
+checkpoint

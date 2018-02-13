@@ -33,14 +33,14 @@ class SeqClassifier(object):
         self.embedding = None
         self.losses = None
         self.output = None
-    
+
     @lazy_property
     def _create_placeholders(self):
         self._inputs = tf.placeholder(
             tf.int32, shape=[None, config.MAX_SEQ_LENGTH], name='input_placeholder')
 
         self._seq_length = tf.placeholder(tf.int32, shape=[None], name='seq_length_placeholder')
-        
+
         self._target = tf.placeholder(
             tf.float32, shape=[config.BATCH_SIZE, config.NUM_CLASSES], name='target_placeholder')
 
@@ -49,14 +49,14 @@ class SeqClassifier(object):
                 tf.float32, shape=[config.VOCAB_SIZE, config.GLOVE_SIZE])
         else:
             self._embedding_placeholder = tf.placeholder(
-                tf.float32, shape=[config.VOCAB_SIZE, config.EMBEDDING_DIMENSION])          
+                tf.float32, shape=[config.VOCAB_SIZE, config.EMBEDDING_DIMENSION])
 
     @lazy_property
     def _create_embedding(self):
         with tf.name_scope('Embeddings'):
             if self.pre_train:
                 self.embedding = tf.Variable(tf.constant(0.0,
-                                                        shape=[config.VOCAB_SIZE, 
+                                                        shape=[config.VOCAB_SIZE,
                                                         config.GLOVE_SIZE]), trainable=config.TRAINABLE_EMBEDDING)
                 self.embedding_init = self.embedding.assign(self._embedding_placeholder)
 
@@ -67,55 +67,56 @@ class SeqClassifier(object):
     @lazy_property
     def _inference(self):
 
+        def _single_cell():
+            _cell = tf.nn.rnn_cell.GRUCell(num_units=config.HIDDEN_LAYER_SIZE)
+            if self.mode == 'train':
+                _cell = tf.contrib.rnn.DropoutWrapper(_cell, output_keep_prob=config.KEEP_PROB)
+            return _cell
+
         embed = tf.nn.embedding_lookup(self.embedding, self._inputs)
 
         with tf.name_scope('Bi-GRU'):
             with tf.variable_scope('forward'):
-                gru_fw_cell = tf.contrib.rnn.GRUCell(
-                    config.HIDDEN_LAYER_SIZE)
-                if self.mode == 'train':
-                    gru_fw_cell = tf.contrib.rnn.DropoutWrapper(gru_fw_cell, output_keep_prob=config.KEEP_PROB )
+                gru_fw_cell = tf.nn.rnn_cell.MultiRNNCell(cells=[_single_cell() for _ in range(config.NUM_GRU_CELL)],
+                                                              state_is_tuple=True)
 
             with tf.variable_scope('backward'):
-                gru_bw_cell = tf.contrib.rnn.GRUCell(
-                    config.HIDDEN_LAYER_SIZE)
-                if self.mode == 'train':
-                    gru_bw_cell = tf.contrib.rnn.DropoutWrapper(gru_bw_cell, output_keep_prob=config.KEEP_PROB)
+                gru_bw_cell = tf.nn.rnn_cell.MultiRNNCell(cells=[_single_cell() for _ in range(config.NUM_GRU_CELL)],
+                                                              state_is_tuple=True)
 
-                outputs, states = tf.nn.bidirectional_dynamic_rnn(cell_fw=gru_fw_cell,
-                                                            cell_bw=gru_bw_cell,
-                                                            inputs=embed,
-                                                            sequence_length=self._seq_length,
-                                                            dtype=tf.float32,
-                                                            scope='Bi-GRU')
-        states = tf.concat(values=states, axis=1)
+            outputs, states = tf.nn.bidirectional_dynamic_rnn(cell_fw=gru_fw_cell,
+                                                        cell_bw=gru_bw_cell,
+                                                        inputs=embed,
+                                                        sequence_length=self._seq_length,
+                                                        dtype=tf.float32,
+                                                        time_major=False,
+                                                        scope='Bi-GRU')
+        states_fw, state_bw = states
+        states = tf.concat(values=[states_fw, state_bw], axis=1)
         with tf.name_scope('Attention'):
-            self.attention_output, self.alphas = attention(outputs, config.ATTENTION_SIZE, return_alphas=config.RETURN_ALPHA)
+            attention_output, self.alphas = attention(outputs, config.ATTENTION_SIZE, return_alphas=config.RETURN_ALPHA)
             if self.mode == 'train':
-                self.attention_output = tf.nn.dropout(self.attention_output, config.KEEP_PROB)
+                attention_output = tf.nn.dropout(attention_output, config.KEEP_PROB)
 
 
-        layer_1 = nn_layer(self.attention_output, 2 * config.HIDDEN_LAYER_SIZE, config.HIDDEN_LAYER_SIZE, 'layer_1', act=tf.nn.relu)
-        layer_1 = tf.nn.dropout(layer_1, config.KEEP_PROB)
+        self.layer_1 = nn_layer(attention_output, 2 * config.HIDDEN_LAYER_SIZE, config.HIDDEN_LAYER_SIZE, 'layer_1', act=tf.nn.relu)
+        if self.mode == 'train':
+            self.layer_1 = tf.nn.dropout(self.layer_1, config.KEEP_PROB)
 
-        layer_2 = nn_layer(layer_1, config.HIDDEN_LAYER_SIZE, config.HIDDEN_LAYER_SIZE // 2, 'layer_2', act=tf.nn.relu)
-        layer_2 = tf.nn.dropout(layer_2, config.KEEP_PROB)
+        layer_2 = nn_layer(self.layer_1, config.HIDDEN_LAYER_SIZE, config.HIDDEN_LAYER_SIZE // 2, 'layer_3', act=tf.nn.relu)
+        if self.mode == 'train':
+            layer_3 = tf.nn.dropout(layer_2, config.KEEP_PROB)
 
-        layer_3 = nn_layer(layer_2, config.HIDDEN_LAYER_SIZE // 2 , config.HIDDEN_LAYER_SIZE // 2, 'layer_3', act=tf.nn.relu)
-        layer_3 = tf.nn.dropout(layer_3, config.KEEP_PROB)
-
-        self.output = nn_layer(layer_3, config.HIDDEN_LAYER_SIZE // 2, config.NUM_CLASSES, 'output')
+        self.output = nn_layer(layer_2, config.HIDDEN_LAYER_SIZE // 2, config.NUM_CLASSES, 'output')
         self.predictions = tf.nn.sigmoid(self.output)
-        
+
     @lazy_property
     def _multi_task_loss(self):
-        mtl_layer_1 = nn_layer(self.attention_output, 2 * config.HIDDEN_LAYER_SIZE, config.HIDDEN_LAYER_SIZE, 'mtl_layer_1', act=tf.nn.relu)
-        mtl_layer_1 = tf.nn.dropout(mtl_layer_1, config.KEEP_PROB)
+        mtl_layer_1 = nn_layer(self.layer_1, config.HIDDEN_LAYER_SIZE, config.HIDDEN_LAYER_SIZE, 'mtl_layer_1', act=tf.nn.relu)
+        if self.mode == 'train':
+            mtl_layer_1 = tf.nn.dropout(mtl_layer_1, config.KEEP_PROB)
 
-        mtl_layer_2 = nn_layer(mtl_layer_1, config.HIDDEN_LAYER_SIZE, config.HIDDEN_LAYER_SIZE // 2, 'mtl_layer_2', act=tf.nn.relu)
-        mtl_layer_2 = tf.nn.dropout(mtl_layer_2, config.KEEP_PROB)
-
-        self.mlt_output = nn_layer(mtl_layer_2, config.HIDDEN_LAYER_SIZE // 2, 1, 'mtl_output', act=None)
+        self.mlt_output = nn_layer(mtl_layer_1, config.HIDDEN_LAYER_SIZE, 1, 'mtl_output', act=None)
         self.mlt_logit = tf.nn.sigmoid(tf.squeeze(self.mlt_output))
 
 
@@ -138,7 +139,7 @@ class SeqClassifier(object):
     @lazy_property
     def _accuracy(self):
         self.accuracy = column_loss(label=self._target,
-                                    pred=self.predictions, 
+                                    pred=self.predictions,
                                     func=tf.metrics.auc)
         tf.summary.scalar('roc_auc', self.accuracy)
 
@@ -148,13 +149,13 @@ class SeqClassifier(object):
         with tf.variable_scope('training') as scope:
             self.global_step = tf.Variable(0, dtype=tf.int32, trainable=False,
                                            name='global_step')
-            
+
             if self.mode == 'train':
                 with tf.name_scope('learning_rate'):
                     self.learning_rate = tf.train.exponential_decay(config.LR, self.global_step,
-                                            10000, 0.96, staircase=True)
+                                            config.DECAY_STEPS, config.DECAY_RATE, staircase=True)
                     tf.summary.scalar('learning_rate', self.learning_rate)
-                self.optimizer = tf.train.GradientDescentOptimizer(self.learning_rate)
+                self.optimizer = tf.train.AdamOptimizer(self.learning_rate)
                 trainbales = tf.trainable_variables()
                 start = time.time()
                 clipped_grads, self.gradient_norms = tf.clip_by_global_norm(tf.gradients(self.losses, trainbales), config.MAX_GRAD_NORM)
